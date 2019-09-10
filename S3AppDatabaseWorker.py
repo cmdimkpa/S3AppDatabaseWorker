@@ -14,7 +14,7 @@ CORS(app)
 global server_host, server_port, true, false, null, conn, bucket
 
 # Configuration
-s3bucket_name,s3conn_user,s3conn_pass,s3region,server_host,server_port = sys.argv
+s3bucket_name,s3conn_user,s3conn_pass,s3region,server_host,server_port = sys.argv[1:]
 
 conn = S3Connection(s3conn_user, s3conn_pass, host="s3.%s.amazonaws.com" % s3region)
 try:
