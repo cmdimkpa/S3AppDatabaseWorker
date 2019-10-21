@@ -442,7 +442,7 @@ def handle_update_record():
         constraints = formdata["constraints"]
         value_dict = formdata["data"]
         ids = search_index(prototype,constraints,"update",value_dict)
-        return responsify(200,"Update OK",{"data":fetch_rows(prototype,ids)[0]})
+        return responsify(200,"Update OK",{"data":fetch_rows(prototype,ids)})
     except Exception as e:
         return responsify(400,"error clue: %s" % str(e))
 
