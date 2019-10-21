@@ -439,9 +439,8 @@ def handle_update_record():
     try:
         formdata = request.get_json(force=True)
         prototype = formdata["tablename"]
-        id = formdata["id"]
+        constraints = formdata["constraints"]
         value_dict = formdata["data"]
-        constraints = {"%s_id" % prototype:[id,id]}
         ids = search_index(prototype,constraints,"update",value_dict)
         return responsify(200,"Update OK",{"data":fetch_rows(prototype,ids)[0]})
     except Exception as e:
