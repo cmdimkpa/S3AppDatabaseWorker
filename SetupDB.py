@@ -11,6 +11,7 @@ THIS_DIR+=slash
 
 config_file = THIS_DIR+"S3AppDatabase.config"
 gateway_file_url = "https://raw.githubusercontent.com/cmdimkpa/S3AppDatabaseWorker/master/DBGateway.js"
+servlet_file_url = "https://raw.githubusercontent.com/cmdimkpa/S3AppDatabaseWorker/master/S3AppDatabaseWorker.py"
 
 try:
     mode = sys.argv[1]
@@ -44,6 +45,10 @@ def make_gateway_file(src):
     gateway_file = THIS_DIR+"DBGateway.js"; p = open(gateway_file,"wb+"); p.write(src); p.close()
     package_file = THIS_DIR+"package.json"; p = open(package_file,"wb+"); p.write("{}"); p.close()
     return gateway_file
+
+def make_servlet_file(src):
+    servlet_file = THIS_DIR+"DBServlet.py"; p = open(servlet_file,"wb+"); p.write(src); p.close()
+    return servlet_file
 
 def run_shell(cmd):
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
@@ -81,7 +86,7 @@ elif mode == "show_config":
         print(write_config({}))
 elif mode == "build_config":
     try:
-        BUILD_STAGES = 4
+        BUILD_STAGES = 2
         BUILD_STAGE = 1
         BUILD_STAGE_DESCR = "Create Gateway Node Environment"
         BUILD_TASK = "Download gateway file"; breakpoint = now()
@@ -107,6 +112,24 @@ elif mode == "build_config":
         BUILD_TASK = "Start Gateway Service"; breakpoint = now()
         print(run_shell("%s forever start -c node %s" % (sudo,"DBGateway.js")))
         report(BUILD_TASK,breakpoint)
+        BUILD_STAGE = 2
+        BUILD_STAGE_DESCR = "Create Python Database Servlet Environment"
+        BUILD_TASK = "Download DB Servlet file"; breakpoint = now()
+        db_servlet_file = make_servlet_file(http.get(servlet_file_url).content)
+        print("Servlet file: %s" % db_servlet_file)
+        report(BUILD_TASK,breakpoint)
+        BUILD_TASK = "Require Python modules"; breakpoint = now()
+        # require pip
+        p = open(THIS_DIR+"get-pip.py","wb+"); p.write(http.get("https://bootstrap.pypa.io/get-pip.py").content); p.close()
+        print(run_shell("%spython get-pip.py" % sudo))
+        # require modules
+        print(run_shell("%spython -m pip install flask flask_cors boto" % sudo))
+        report(BUILD_TASK,breakpoint)
+        BUILD_TASK = "Run Python Servlet"; breakpoint = now()
+        
+        report(BUILD_TASK,breakpoint)
+        print("Built Database Successfully. Exiting...")
+        sys.exit()
     except Exception as error:
         print("BuildError: [Build Stage: %s/%s, Build Process: %s -> %s] : %s" % (BUILD_STAGE,BUILD_STAGES,BUILD_STAGE_DESCR,BUILD_TASK,str(error)))
 else:
