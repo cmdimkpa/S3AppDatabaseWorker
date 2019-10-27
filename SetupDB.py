@@ -62,17 +62,20 @@ def run_shell(cmd):
             return out
 
 if mode == "edit_config":
+    default_config = {
+        "s3bucket_name":None,
+        "s3conn_user":None,
+        "s3conn_pass":None,
+        "s3region":None,
+        "server_host":None,
+        "server_port":None
+    }
     try:
         config = read_config()
+        if not config:
+            config = default_config
     except:
-        config = {
-            "s3bucket_name":None,
-            "s3conn_user":None,
-            "s3conn_pass":None,
-            "s3region":None,
-            "server_host":None,
-            "server_port":None
-        }
+        config = default_config
     for key in config:
         print("%s: ? %s" % (key,config[key]))
         entry = raw_input()
