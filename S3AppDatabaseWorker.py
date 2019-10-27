@@ -50,6 +50,12 @@ def storage_instance_key():
     global bucket
     return Key(bucket)
 
+def delete_key(keyname):
+    key = storage_instance_key()
+    key.key = keyname
+    key.delete()
+    return None
+
 def store_string_in_s3(keyname,stringdata):
     key = storage_instance_key()
     key.key = keyname
@@ -424,7 +430,7 @@ def handle_fetch_record():
             page_size = this_page = None
         constraints = formdata["constraints"]
         prototype = formdata["tablename"]
-        if constraints == "*":
+        if constraints in ["*",{}]:
             return responsify(200,"logical table: %s" % prototype,wrap_response(prototype,fetch_all_rows(prototype,page_size,this_page)))
         else:
             constraints = {key:format_param(constraints[key]) for key in constraints}
@@ -446,22 +452,7 @@ def handle_update_record():
     except Exception as e:
         return responsify(400,"error clue: %s" % str(e))
 
-@app.route("/ods/search",methods=["POST"])
-@gzipped
-def handle_search():
-    try:
-        formdata = request.get_json(force=True)
-        constraints = formdata["constraints"]
-        prototype = formdata["tablename"]
-        if constraints == "*":
-            return responsify(200,"logical table: %s" % prototype,fetch_all_rows(prototype))
-        else:
-            records = search_index(prototype,constraints,"records")
-            return responsify(200,"%s search results attached" % len(records),records)
-    except Exception as e:
-        return responsify(400,"error clue: %s" % str(e))
-
-@app.route("/ods/reset_row_count/<path:prototype>")
+@app.route("/ods/flush_table/<path:prototype>")
 @gzipped
 def rrc(prototype):
     try:
@@ -469,7 +460,11 @@ def rrc(prototype):
         if prototype in register:
             register[prototype]["row_count"] = 0
             set_register(register)
-        return responsify(200,"Register Updated")
+            delete_key("S3AppDatabase.%s.index" % prototype)
+            delete_key("S3AppDatabase.%s.table" % prototype)
+            return responsify(200,"Table: [%s] flushed" % prototype)
+        else:
+            return responsify(400,"No such table: %s" % prototype)
     except Exception as e:
         return responsify(400,"error clue: %s" % str(e))
 
@@ -478,15 +473,6 @@ def rrc(prototype):
 def gr():
     try:
         return responsify(200,"Register Attached",get_register())
-    except Exception as e:
-        return responsify(400,"error clue: %s" % str(e))
-
-@app.route("/ods/set_register",methods=["POST"])
-@gzipped
-def sr():
-    try:
-        formdata = request.get_json(force=True)
-        return responsify(200,"Register Updated",set_register(formdata["register"]))
     except Exception as e:
         return responsify(400,"error clue: %s" % str(e))
 
