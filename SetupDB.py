@@ -128,7 +128,7 @@ elif mode == "build_config":
         BUILD_TASK = "Run Python Servlet"; breakpoint = now()
         print(run_shell("%sforever start -c python DBServlet.py %s %s %s %s %s %s" % (sudo,Config["s3bucket_name"],Config["s3conn_user"],Config["s3conn_pass"],Config["s3region"],Config["server_host"],int(Config["server_port"])+1)))
         report(BUILD_TASK,breakpoint)
-        print("Built Database Successfully. Exiting...")
+        print("Database API Running on: http://%s:%s/ods/" % (Config["server_host"],Config["server_port"]))
         sys.exit()
     except Exception as error:
         print("BuildError: [Build Stage: %s/%s, Build Process: %s -> %s] : %s" % (BUILD_STAGE,BUILD_STAGES,BUILD_STAGE_DESCR,BUILD_TASK,str(error)))
