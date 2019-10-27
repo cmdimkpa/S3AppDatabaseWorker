@@ -91,7 +91,8 @@ elif mode == "import_config":
     try:
         url = sys.argv[2]
         try:
-            print(write_config(http.get(url).json()))
+            config = http.get(url).json()
+            print(write_config(str(config)))
         except:
             print("Config file Not JSON Serializable, exiting...")
             sys.exit()
