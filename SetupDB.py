@@ -126,7 +126,7 @@ elif mode == "build_config":
         print(run_shell("%spython -m pip install flask flask_cors boto" % sudo))
         report(BUILD_TASK,breakpoint)
         BUILD_TASK = "Run Python Servlet"; breakpoint = now()
-        
+        print(run_shell("%sforever start -c python DBServlet.py %s %s %s %s %s %s" % (sudo,Config["s3bucket_name"],Config["s3conn_user"],Config["s3conn_pass"],Config["s3region"],Config["server_host"],Config["server_port"])))
         report(BUILD_TASK,breakpoint)
         print("Built Database Successfully. Exiting...")
         sys.exit()
