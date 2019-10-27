@@ -87,6 +87,17 @@ elif mode == "show_config":
         print(read_config())
     except:
         print(write_config({}))
+elif mode == "import_config":
+    try:
+        url = sys.argv[2]
+        try:
+            print(write_config(http.get(url).json()))
+        except:
+            print("Config file Not JSON Serializable, exiting...")
+            sys.exit()
+    except:
+        print("Import URL not found, Exiting...")
+        sys.exit()
 elif mode == "build_config":
     try:
         BUILD_STAGES = 2
