@@ -250,7 +250,6 @@ def update_table_rows(TABLE,rows,value_dict):
     return TABLE
 
 def update_rows(row_ids,prototype,value_dict):
-    global REGISTER,INDEX,TABLE
     REGISTER = get_register()
     if prototype in REGISTER:
         INDEX = get_index(prototype)
@@ -258,7 +257,7 @@ def update_rows(row_ids,prototype,value_dict):
     else:
         return null
     def update_logical_row(row_id,prototype,value_dict):
-        global INDEX,TABLE
+        global INDEX
         try:
             dataform = REGISTER[prototype]["dataform"]
             common_fields = [field for field in value_dict if field in dataform]
