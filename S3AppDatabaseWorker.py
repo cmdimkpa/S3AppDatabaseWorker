@@ -168,7 +168,7 @@ def set_table(prototype,TABLE):
     return null
 
 def update_prototype(prototype,dataform):
-    dataform+=[x for x in ["row_id","%s_id" % prototype] if x not in dataform]
+    dataform+=[x for x in ["private","row_id","%s_id" % prototype] if x not in dataform]
     REGISTER = get_register()
     if prototype in REGISTER:
         REGISTER[prototype]["dataform"]+=[x for x in dataform if x not in REGISTER[prototype]["dataform"]]
@@ -243,12 +243,6 @@ def search_index(prototype,constraints,mode="rows",value_dict={},page_size=None,
             return matches
     return null
 
-def update_table_rows(TABLE,rows,value_dict):
-    for row in rows:
-        for field in [field for field in value_dict if field in TABLE[row]]:
-            TABLE[row][field] = value_dict[field]
-    return TABLE
-
 def update_rows(row_ids,prototype,value_dict):
     global INDEX,TABLE
     REGISTER = get_register()
@@ -258,11 +252,12 @@ def update_rows(row_ids,prototype,value_dict):
     else:
         return null
     def update_logical_row(row_id,prototype,value_dict):
-        global INDEX
+        global INDEX,TABLE
         try:
             dataform = REGISTER[prototype]["dataform"]
             common_fields = [field for field in value_dict if field in dataform]
             for field in common_fields:
+                TABLE[row_id][field] = value_dict[field]
                 try:
                     for value in INDEX[field]:
                         if row_id in INDEX[field][value]:
@@ -285,7 +280,7 @@ def update_rows(row_ids,prototype,value_dict):
             return null
     result = [update_logical_row(row_id,prototype,value_dict) for row_id in row_ids]
     set_index(prototype,INDEX)
-    set_table(prototype,update_table_rows(TABLE,row_ids,value_dict))
+    set_table(prototype,TABLE)
     return result
 
 def update_all_rows(prototype,value_dict):
@@ -334,6 +329,8 @@ def new_record(prototype,data):
         dataform = REGISTER[prototype]["dataform"]
         row_count = REGISTER[prototype]["row_count"]
         row_count+=1
+        # make record public
+        data["private"] = 0
         # add row_id and prototype_id if necessary
         prototype_id = "%s_id" % prototype
         if "row_id" not in data:
@@ -365,6 +362,19 @@ def new_record(prototype,data):
         return data[prototype_id]
     else:
         return null
+
+def format_param(param):
+    def normalize(i):
+        type_ = str(type(i))
+        if "str" in type_ or "unicode" in type_:
+            return str(i).lower()
+        else:
+            return i
+    type_ = str(type(param))
+    if "list" in type_:
+        return map(normalize,param)
+    else:
+        return [normalize(param)]*2
 
 @app.route("/ods/get_schemas")
 def get_schemas():
@@ -412,21 +422,9 @@ def handle_new_record():
     except Exception as e:
         return responsify(400,"error clue: %s" % str(e))
 
-@app.route("/ods/fetch_record",methods=["POST"])
+@app.route("/ods/fetch_records",methods=["POST"])
 @gzipped
-def handle_fetch_record():
-    def format_param(param):
-        def normalize(i):
-            type_ = str(type(i))
-            if "str" in type_ or "unicode" in type_:
-                return str(i).lower()
-            else:
-                return i
-        type_ = str(type(param))
-        if "list" in type_:
-            return map(normalize,param)
-        else:
-            return [normalize(param)]*2
+def handle_fetch_records():
     try:
         formdata = request.get_json(force=True)
         if "page_size" in formdata and "this_page" in formdata:
@@ -436,24 +434,43 @@ def handle_fetch_record():
         constraints = formdata["constraints"]
         prototype = formdata["tablename"]
         if constraints in ["*",{}]:
-            return responsify(200,"logical table: %s" % prototype,wrap_response(prototype,fetch_all_rows(prototype,page_size,this_page)))
+            constraints = {"private":0}
         else:
+            constraints["private"] = 0
             constraints = {key:format_param(constraints[key]) for key in constraints}
-            ids = search_index(prototype,constraints,page_size,this_page)
+            ids = search_index(prototype,constraints,"rows",{},page_size,this_page)
             return responsify(200,"logical table selection: %s %s" % (prototype,ids),wrap_response(prototype,fetch_rows(prototype,ids)))
     except Exception as e:
         return responsify(400,"error clue: %s" % str(e))
 
-@app.route("/ods/update_record",methods=["POST","PATCH"])
+@app.route("/ods/update_records",methods=["POST"])
 @gzipped
-def handle_update_record():
+def handle_update_records():
     try:
         formdata = request.get_json(force=True)
-        prototype = formdata["tablename"]
         constraints = formdata["constraints"]
+        prototype = formdata["tablename"]
         value_dict = formdata["data"]
+        constraints["private"] = 0
+        constraints = {key:format_param(constraints[key]) for key in constraints}
+        value_dict = {key:format_param(value_dict[key]) for key in value_dict}
         ids = search_index(prototype,constraints,"update",value_dict)
-        return responsify(200,"Update OK",{"data":fetch_rows(prototype,ids)})
+        return responsify(200,"updated table selection: %s %s" % (prototype,ids),wrap_response(prototype,fetch_rows(prototype,ids)))
+    except Exception as e:
+        return responsify(400,"error clue: %s" % str(e))
+
+@app.route("/ods/delete_records",methods=["POST"])
+@gzipped
+def handle_update_records():
+    try:
+        formdata = request.get_json(force=True)
+        constraints = formdata["constraints"]
+        prototype = formdata["tablename"]
+        value_dict = {"private":1}
+        constraints = {key:format_param(constraints[key]) for key in constraints}
+        value_dict = {key:format_param(value_dict[key]) for key in value_dict}
+        ids = search_index(prototype,constraints,"update",value_dict)
+        return responsify(200,"deleted table selection: %s %s" % (prototype,ids),wrap_response(prototype,fetch_rows(prototype,ids)))
     except Exception as e:
         return responsify(400,"error clue: %s" % str(e))
 
