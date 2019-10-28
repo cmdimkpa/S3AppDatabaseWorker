@@ -363,20 +363,20 @@ def get_stats():
     REGISTER = get_register()
     return responsify(200,"OK",{prototype:REGISTER[prototype]["row_count"] for prototype in REGISTER})
 
-@app.route("/ods/new_prototype", methods=["POST"])
+@app.route("/ods/new_table", methods=["POST"])
 def new_prototype():
     formdata = request.get_json(force=True)
-    required = ["object","dataform"]
+    required = ["tablename","model"]
     missing = [key for key in required if key not in formdata.keys()]
     if missing:
         return responsify(404,"error: the following required fields were not found: %s" % str(missing))
     else:
-        object = formdata["object"]
-        dataform  = formdata["dataform"]
+        object = formdata["tablename"]
+        dataform  = formdata["model"]
         update_prototype(object,dataform.keys())
         return responsify(201,"prototype updated for object: %s" % object.upper())
 
-@app.route("/ods/get_prototype/<path:tablename>")
+@app.route("/ods/get_model/<path:tablename>")
 def get_prototype(tablename):
     prototype = get_dataform(tablename)
     if prototype:
