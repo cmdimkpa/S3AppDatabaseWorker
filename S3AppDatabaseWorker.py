@@ -244,12 +244,14 @@ def search_index(prototype,constraints,mode="rows",value_dict={},page_size=None,
     return null
 
 def update_table_rows(TABLE,rows,value_dict):
+    global TABLE
     for row in rows:
         for field in [field for field in value_dict if field in TABLE[row]]:
             TABLE[row][field] = value_dict[field]
     return TABLE
 
 def update_rows(row_ids,prototype,value_dict):
+    global INDEX,TABLE
     REGISTER = get_register()
     if prototype in REGISTER:
         INDEX = get_index(prototype)
