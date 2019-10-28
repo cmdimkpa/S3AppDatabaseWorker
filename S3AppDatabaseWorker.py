@@ -415,9 +415,9 @@ def handle_fetch_records():
             constraints = {"private":0}
         else:
             constraints["private"] = 0
-            constraints = {key:format_param(constraints[key]) for key in constraints}
-            ids = search_index(prototype,constraints,"rows",{},page_size,this_page)
-            return responsify(200,"logical table selection: %s %s" % (prototype,ids),fetch_rows(prototype,ids))
+        constraints = {key:format_param(constraints[key]) for key in constraints}
+        ids = search_index(prototype,constraints,"rows",{},page_size,this_page)
+        return responsify(200,"logical table selection: %s %s" % (prototype,ids),fetch_rows(prototype,ids))
     except Exception as e:
         return responsify(400,"error clue: %s" % str(e))
 
