@@ -474,7 +474,7 @@ def gr():
     except Exception as e:
         return responsify(400,"error clue: %s" % str(e))
 
-@app.route("/ods/get_records",methods=["POST"])
+@app.route("/ods/get_rows",methods=["POST"])
 @gzipped
 def get_records():
     try:
