@@ -168,7 +168,7 @@ def set_table(prototype,TABLE):
     return null
 
 def update_prototype(prototype,dataform):
-    dataform+=[x for x in ["private","row_id","%s_id" % prototype] if x not in dataform]
+    dataform+=[x for x in ["__private__","row_id","%s_id" % prototype] if x not in dataform]
     REGISTER = get_register()
     if prototype in REGISTER:
         REGISTER[prototype]["dataform"]+=[x for x in dataform if x not in REGISTER[prototype]["dataform"]]
@@ -308,7 +308,7 @@ def new_record(prototype,data):
         row_count = REGISTER[prototype]["row_count"]
         row_count+=1
         # make record public
-        data["private"] = 0
+        data["__private__"] = 0
         # add row_id and prototype_id if necessary
         prototype_id = "%s_id" % prototype
         if "row_id" not in data:
@@ -412,9 +412,9 @@ def handle_fetch_records():
         constraints = formdata["constraints"]
         prototype = formdata["tablename"]
         if constraints in ["*",{}]:
-            constraints = {"private":0}
+            constraints = {"__private__":0}
         else:
-            constraints["private"] = 0
+            constraints["__private__"] = 0
         constraints = {key:format_param(constraints[key]) for key in constraints}
         ids = search_index(prototype,constraints,"rows",{},page_size,this_page)
         return responsify(200,"logical table selection: %s %s" % (prototype,ids),fetch_rows(prototype,ids))
@@ -429,7 +429,7 @@ def handle_update_records():
         constraints = formdata["constraints"]
         prototype = formdata["tablename"]
         value_dict = formdata["data"]
-        constraints["private"] = 0
+        constraints["__private__"] = 0
         constraints = {key:format_param(constraints[key]) for key in constraints}
         ids = search_index(prototype,constraints,"update",value_dict)
         return responsify(200,"updated table selection: %s %s" % (prototype,ids),fetch_rows(prototype,ids))
@@ -443,7 +443,7 @@ def handle_delete_records():
         formdata = request.get_json(force=True)
         constraints = formdata["constraints"]
         prototype = formdata["tablename"]
-        value_dict = {"private":1}
+        value_dict = {"__private__":1}
         constraints = {key:format_param(constraints[key]) for key in constraints}
         ids = search_index(prototype,constraints,"update",value_dict)
         return responsify(200,"deleted table selection: %s %s" % (prototype,ids),fetch_rows(prototype,ids))
