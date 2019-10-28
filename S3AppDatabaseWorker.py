@@ -1,7 +1,7 @@
 from __future__ import division
 from flask import Flask,request,Response,after_this_request
 from flask_cors import CORS
-import json,base64,cStringIO,gzip,functools,boto,datetime,sys
+import json,base64,cStringIO,gzip,functools,boto,datetime,sys,time
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
 import requests as http
@@ -26,6 +26,9 @@ true = True; false = False; null = None
 
 def now():
     return str(datetime.datetime.today())
+
+def timestamp():
+    return int(time.time())
 
 def paginate(array,page_size=None,this_page=None):
     if page_size and this_page:
@@ -168,7 +171,7 @@ def set_table(prototype,TABLE):
     return null
 
 def update_prototype(prototype,dataform):
-    dataform+=[x for x in ["__private__","row_id","%s_id" % prototype] if x not in dataform]
+    dataform+=[x for x in ["__created_at__","__updated_at__","__private__","row_id","%s_id" % prototype] if x not in dataform]
     REGISTER = get_register()
     if prototype in REGISTER:
         REGISTER[prototype]["dataform"]+=[x for x in dataform if x not in REGISTER[prototype]["dataform"]]
@@ -275,6 +278,8 @@ def update_rows(row_ids,prototype,value_dict):
                         INDEX[field][new_value] = [row_id]
                 else:
                     INDEX[field] = {new_value:[row_id]}
+            # stamp record
+            TABLE[row_id]["__updated_at__"] = timestamp()
             return row_id
         except:
             return null
@@ -307,6 +312,9 @@ def new_record(prototype,data):
         dataform = REGISTER[prototype]["dataform"]
         row_count = REGISTER[prototype]["row_count"]
         row_count+=1
+        # stamp record
+        data["__created_at__"] = timestamp()
+        data["__updated_at__"] = null
         # make record public
         data["__private__"] = 0
         # add row_id and prototype_id if necessary
