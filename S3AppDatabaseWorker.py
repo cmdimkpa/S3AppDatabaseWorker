@@ -366,17 +366,17 @@ def get_stats():
 @app.route("/ods/new_table", methods=["POST"])
 def new_prototype():
     formdata = request.get_json(force=True)
-    required = ["tablename","model"]
+    required = ["tablename","fields"]
     missing = [key for key in required if key not in formdata.keys()]
     if missing:
         return responsify(404,"error: the following required fields were not found: %s" % str(missing))
     else:
         object = formdata["tablename"]
-        dataform  = formdata["model"]
-        update_prototype(object,dataform.keys())
+        dataform  = formdata["fields"]
+        update_prototype(object,dataform)
         return responsify(201,"prototype updated for object: %s" % object.upper())
 
-@app.route("/ods/get_model/<path:tablename>")
+@app.route("/ods/get_fields/<path:tablename>")
 def get_prototype(tablename):
     prototype = get_dataform(tablename)
     if prototype:
