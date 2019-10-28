@@ -243,6 +243,12 @@ def search_index(prototype,constraints,mode="rows",value_dict={},page_size=None,
             return matches
     return null
 
+def update_table_rows(TABLE,rows,value_dict):
+    for row in rows:
+        for field in [field for field in value_dict if field in TABLE[row]]:
+            TABLE[row][field] = value_dict[field]
+    return TABLE
+
 def update_rows(row_ids,prototype,value_dict):
     global REGISTER,INDEX,TABLE
     REGISTER = get_register()
@@ -257,7 +263,6 @@ def update_rows(row_ids,prototype,value_dict):
             dataform = REGISTER[prototype]["dataform"]
             common_fields = [field for field in value_dict if field in dataform]
             for field in common_fields:
-                TABLE[row_id][field] = value_dict[field]
                 try:
                     for value in INDEX[field]:
                         if row_id in INDEX[field][value]:
@@ -280,7 +285,7 @@ def update_rows(row_ids,prototype,value_dict):
             return null
     result = [update_logical_row(row_id,prototype,value_dict) for row_id in row_ids]
     set_index(prototype,INDEX)
-    set_table(prototype,TABLE)
+    set_table(prototype,update_table_rows(TABLE,row_ids,value_dict))
     return result
 
 def update_all_rows(prototype,value_dict):
