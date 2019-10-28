@@ -283,19 +283,6 @@ def update_rows(row_ids,prototype,value_dict):
     set_table(prototype,TABLE)
     return result
 
-def update_all_rows(prototype,value_dict):
-    try:
-        return update_rows(xrange(get_row_count(prototype)+1),prototype,value_dict)
-    except:
-        return null
-
-def get_row_count(prototype):
-    REGISTER = get_register()
-    if prototype in REGISTER:
-        return REGISTER[prototype]["row_count"]
-    else:
-        return null
-
 def get_dataform(prototype):
     REGISTER = get_register()
     if prototype in REGISTER:
@@ -313,15 +300,6 @@ def fetch_rows(prototype,row_ids):
             return [TABLE[row_id] for row_id in row_ids]
     else:
         return null
-
-def fetch_all_rows(prototype,page_size=None,this_page=None):
-    try:
-        return paginate(fetch_rows(prototype,"*"),page_size,this_page)
-    except:
-        return null
-
-def wrap_response(prototype,data):
-    return {"data":{"data":{prototype:data}}}
 
 def new_record(prototype,data):
     REGISTER = get_register()
@@ -439,7 +417,7 @@ def handle_fetch_records():
             constraints["private"] = 0
             constraints = {key:format_param(constraints[key]) for key in constraints}
             ids = search_index(prototype,constraints,"rows",{},page_size,this_page)
-            return responsify(200,"logical table selection: %s %s" % (prototype,ids),wrap_response(prototype,fetch_rows(prototype,ids)))
+            return responsify(200,"logical table selection: %s %s" % (prototype,ids),fetch_rows(prototype,ids))
     except Exception as e:
         return responsify(400,"error clue: %s" % str(e))
 
@@ -455,7 +433,7 @@ def handle_update_records():
         constraints = {key:format_param(constraints[key]) for key in constraints}
         value_dict = {key:format_param(value_dict[key]) for key in value_dict}
         ids = search_index(prototype,constraints,"update",value_dict)
-        return responsify(200,"updated table selection: %s %s" % (prototype,ids),wrap_response(prototype,fetch_rows(prototype,ids)))
+        return responsify(200,"updated table selection: %s %s" % (prototype,ids),fetch_rows(prototype,ids))
     except Exception as e:
         return responsify(400,"error clue: %s" % str(e))
 
@@ -470,7 +448,7 @@ def handle_update_records():
         constraints = {key:format_param(constraints[key]) for key in constraints}
         value_dict = {key:format_param(value_dict[key]) for key in value_dict}
         ids = search_index(prototype,constraints,"update",value_dict)
-        return responsify(200,"deleted table selection: %s %s" % (prototype,ids),wrap_response(prototype,fetch_rows(prototype,ids)))
+        return responsify(200,"deleted table selection: %s %s" % (prototype,ids),fetch_rows(prototype,ids))
     except Exception as e:
         return responsify(400,"error clue: %s" % str(e))
 
@@ -505,7 +483,7 @@ def get_records():
         formdata = request.get_json(force=True)
         prototype = formdata["tablename"]
         row_ids = formdata["row_ids"]
-        return responsify(200,"Records Attached",wrap_response(prototype,fetch_rows(prototype,row_ids)))
+        return responsify(200,"Records Attached",fetch_rows(prototype,row_ids))
     except Exception as e:
         return responsify(400,"error clue: %s" % str(e))
 
