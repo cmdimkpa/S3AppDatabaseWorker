@@ -439,7 +439,7 @@ def handle_update_records():
 
 @app.route("/ods/delete_records",methods=["POST"])
 @gzipped
-def handle_update_records():
+def handle_delete_records():
     try:
         formdata = request.get_json(force=True)
         constraints = formdata["constraints"]
