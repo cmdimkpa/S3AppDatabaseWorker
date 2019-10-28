@@ -431,7 +431,6 @@ def handle_update_records():
         value_dict = formdata["data"]
         constraints["private"] = 0
         constraints = {key:format_param(constraints[key]) for key in constraints}
-        value_dict = {key:format_param(value_dict[key]) for key in value_dict}
         ids = search_index(prototype,constraints,"update",value_dict)
         return responsify(200,"updated table selection: %s %s" % (prototype,ids),fetch_rows(prototype,ids))
     except Exception as e:
@@ -446,7 +445,6 @@ def handle_delete_records():
         prototype = formdata["tablename"]
         value_dict = {"private":1}
         constraints = {key:format_param(constraints[key]) for key in constraints}
-        value_dict = {key:format_param(value_dict[key]) for key in value_dict}
         ids = search_index(prototype,constraints,"update",value_dict)
         return responsify(200,"deleted table selection: %s %s" % (prototype,ids),fetch_rows(prototype,ids))
     except Exception as e:
