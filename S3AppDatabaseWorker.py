@@ -1,6 +1,7 @@
 from __future__ import division
 from flask import Flask,request,Response,after_this_request
 from flask_cors import CORS
+from flask_socketio import SocketIO
 import json,base64,cStringIO,gzip,functools,boto,datetime,sys,time
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
@@ -10,6 +11,7 @@ from hashlib import md5
 app = Flask(__name__)
 app.config['SECRET_KEY'] = "S3AppDatabaseWorker"
 CORS(app)
+socketio = SocketIO(app)
 
 global server_host, server_port, true, false, null, conn, bucket
 
@@ -494,4 +496,4 @@ def get_records():
         return responsify(400,"error clue: %s" % str(e))
 
 if __name__ == "__main__":
-    app.run(host=server_host,port=server_port,threaded=true)
+    socketio.run(app,host=server_host,port=server_port)
