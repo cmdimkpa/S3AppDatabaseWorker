@@ -1,8 +1,10 @@
 from __future__ import division
+import eventlet
+eventlet.monkey_patch()
 from flask import Flask,request,Response,after_this_request
 from flask_cors import CORS
 from flask_socketio import SocketIO
-import json,base64,cStringIO,gzip,functools,boto,datetime,sys,time,threading
+import json,base64,cStringIO,gzip,functools,boto,datetime,sys,time
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
 import requests as http
@@ -13,11 +15,15 @@ app.config['SECRET_KEY'] = "S3AppDatabaseWorker"
 CORS(app)
 socketio = SocketIO(app)
 
-global server_host, server_port, true, false, null, SESSION_STORAGE
+global server_host, server_port, true, false, null, conn, bucket
 
-# Configuration
 s3bucket_name,s3conn_user,s3conn_pass,s3region,server_host,server_port = sys.argv[1:]
-true = True; false = False; null = None; SESSION_STORAGE = {}
+conn = S3Connection(s3conn_user, s3conn_pass, host="s3.%s.amazonaws.com" % s3region)
+try:
+    bucket = conn.create_bucket(s3bucket_name)
+except:
+    bucket = conn.get_bucket(s3bucket_name)
+true = True; false = False; null = None
 
 def now():
     return str(datetime.datetime.today())
@@ -45,34 +51,38 @@ def new_id():
     return hasher.hexdigest()
 
 def RunParallelS3Events(Events):
-    global SESSION_STORAGE
-    conn = S3Connection(s3conn_user, s3conn_pass, host="s3.%s.amazonaws.com" % s3region)
-    try:
-        bucket = conn.create_bucket(s3bucket_name)
-    except:
-        bucket = conn.get_bucket(s3bucket_name)
-    def delete_key(keyname):
-        key = Key(bucket); key.key = keyname; key.delete()
-        return None
-    def store_string_in_s3(keyname,stringdata):
-        key = Key(bucket); key.key = keyname; key.set_contents_from_string(stringdata)
-        return None
-    def fetch_string_from_s3(keyname):
+    global delete_key, store_string_in_s3, fetch_string_from_s3, SESSION_STORAGE
+    SESSION_STORAGE = {}
+    def event_handler(event):
         global SESSION_STORAGE
-        key = Key(bucket); key.key = keyname
         try:
-            SESSION_STORAGE[keyname] = eval(key.get_contents_as_string())
-        except Exception as error:
-            SESSION_STORAGE[keyname] = str(error)
-        return None
-    def to_event_config(event):
-        return {
-            "event":eval(event["event"]),
-            "args_tuple":tuple(event["params"])
-            }
-    for event in Events:
-        event_config = to_event_config(event)
-        t = threading.Thread(target = event_config["event"], args=event_config["args_tuple"]).start()
+            def delete_key(params):
+                keyname = params[0]
+                key = Key(bucket); key.key = keyname; key.delete()
+                return null
+            def store_string_in_s3(params):
+                keyname,stringdata = params
+                key = Key(bucket); key.key = keyname; key.set_contents_from_string(stringdata)
+                return null
+            def fetch_string_from_s3(params):
+                global SESSION_STORAGE
+                keyname = params[0]
+                key = Key(bucket); key.key = keyname
+                try:
+                    content = eval(key.get_contents_as_string())
+                except Exception as error:
+                    content = str(error)
+                SESSION_STORAGE[keyname] = content
+                return null
+        except:
+            return null
+        params = [event["keyname"]]
+        if "store_string_in_s3" in event["event"]:
+            params.append(event["datastring"])
+        return eval(event["event"])(params)
+    pool = eventlet.GreenPool(size=10)
+    pool.imap(event_handler,Events)
+    return SESSION_STORAGE
 
 def responsify(status,message,data={}):
     code = int(status)
@@ -108,91 +118,87 @@ def gzipped(f):
     return view_func
 
 def get_register():
-    global SESSION_STORAGE
-    RunParallelS3Events([
-        {"event":"fetch_string_from_s3","params":["S3AppDatabase.register"]},
+    SESSION_STORAGE = RunParallelS3Events([
+        {"event":"fetch_string_from_s3","keyname":"S3AppDatabase.register"},
     ])
     REGISTER = SESSION_STORAGE["S3AppDatabase.register"]
     if "S3ResponseError: 404 Not Found" in REGISTER:
         RunParallelS3Events([
-            {"event":"store_string_in_s3","params":["S3AppDatabase.register",repr({})]},
+            {"event":"store_string_in_s3","keyname":"S3AppDatabase.register","datastring":repr({})},
         ])
         REGISTER = {}
     return REGISTER
 
 def set_register(REGISTER):
     RunParallelS3Events([
-        {"event":"store_string_in_s3","params":["S3AppDatabase.register",repr(REGISTER)]},
+        {"event":"store_string_in_s3","keyname":"S3AppDatabase.register","datastring":repr(REGISTER)},
     ])
     return null
 
 def get_index(prototype):
-    global SESSION_STORAGE
-    indexname = "S3AppDatabase.%s.index" % prototype
-    RunParallelS3Events([
-        {"event":"fetch_string_from_s3","params":["S3AppDatabase.register"]},
-        {"event":"fetch_string_from_s3","params":[indexname]},
+    indexname = str("S3AppDatabase.%s.index" % prototype)
+    SESSION_STORAGE = RunParallelS3Events([
+        {"event":"fetch_string_from_s3","keyname":"S3AppDatabase.register"},
+        {"event":"fetch_string_from_s3","keyname":indexname},
     ])
     REGISTER = SESSION_STORAGE["S3AppDatabase.register"]
     INDEX = SESSION_STORAGE[indexname]
     if "S3ResponseError: 404 Not Found" in REGISTER:
         RunParallelS3Events([
-            {"event":"store_string_in_s3","params":["S3AppDatabase.register",repr({})]},
+            {"event":"store_string_in_s3","keyname":"S3AppDatabase.register", "datastring":repr({})},
         ])
         return null
     if "S3ResponseError: 404 Not Found" in INDEX:
         return null
-    return INDEX
+    return INDEX,SESSION_STORAGE
 
 def get_table(prototype):
-    global SESSION_STORAGE
-    tablename = "S3AppDatabase.%s.table" % prototype
-    RunParallelS3Events([
-        {"event":"fetch_string_from_s3","params":["S3AppDatabase.register"]},
-        {"event":"fetch_string_from_s3","params":[tablename]},
+    tablename = str("S3AppDatabase.%s.table" % prototype)
+    SESSION_STORAGE = RunParallelS3Events([
+        {"event":"fetch_string_from_s3","keyname":"S3AppDatabase.register"},
+        {"event":"fetch_string_from_s3","keyname":tablename},
     ])
     REGISTER = SESSION_STORAGE["S3AppDatabase.register"]
     TABLE = SESSION_STORAGE[tablename]
     if "S3ResponseError: 404 Not Found" in REGISTER:
         RunParallelS3Events([
-            {"event":"store_string_in_s3","params":["S3AppDatabase.register",repr({})]},
+            {"event":"store_string_in_s3","keyname":"S3AppDatabase.register", "datastring":repr({})},
         ])
         return null
     if "S3ResponseError: 404 Not Found" in TABLE:
         return null
-    return TABLE
+    return TABLE,SESSION_STORAGE
 
 def get_table_and_index(prototype):
-    global SESSION_STORAGE
-    tablename = "S3AppDatabase.%s.table" % prototype
-    indexname = "S3AppDatabase.%s.index" % prototype
-    RunParallelS3Events([
-        {"event":"fetch_string_from_s3","params":["S3AppDatabase.register"]},
-        {"event":"fetch_string_from_s3","params":[tablename]},
-        {"event":"fetch_string_from_s3","params":[indexname]},
+    tablename = str("S3AppDatabase.%s.table" % prototype)
+    indexname = str("S3AppDatabase.%s.index" % prototype)
+    SESSION_STORAGE = RunParallelS3Events([
+        {"event":"fetch_string_from_s3","keyname":"S3AppDatabase.register"},
+        {"event":"fetch_string_from_s3","keyname":tablename},
+        {"event":"fetch_string_from_s3","keyname":indexname},
     ])
     REGISTER = SESSION_STORAGE["S3AppDatabase.register"]
     TABLE = SESSION_STORAGE[tablename]
     INDEX = SESSION_STORAGE[indexname]
     if "S3ResponseError: 404 Not Found" in REGISTER:
         RunParallelS3Events([
-            {"event":"store_string_in_s3","params":["S3AppDatabase.register",repr({})]},
+            {"event":"store_string_in_s3","keyname":"S3AppDatabase.register","datastring":repr({})},
         ])
         return null,null
     if "S3ResponseError: 404 Not Found" in TABLE:
         TABLE = null
     if "S3ResponseError: 404 Not Found" in INDEX:
         INDEX = null
-    return TABLE,INDEX
+    return TABLE,INDEX,SESSION_STORAGE
 
 def set_table_and_index(prototype,TABLE,INDEX,REGISTER):
     if prototype in REGISTER:
-        tablename = "S3AppDatabase.%s.table" % prototype
-        indexname = "S3AppDatabase.%s.index" % prototype
+        tablename = str("S3AppDatabase.%s.table" % prototype)
+        indexname = str("S3AppDatabase.%s.index" % prototype)
         RunParallelS3Events([
-            {"event":"store_string_in_s3","params":[tablename,repr(TABLE)]},
-            {"event":"store_string_in_s3","params":[indexname,repr(INDEX)]},
-            {"event":"store_string_in_s3","params":["S3AppDatabase.register",repr(REGISTER)]},
+            {"event":"store_string_in_s3","keyname":tablename,"datastring":repr(TABLE)},
+            {"event":"store_string_in_s3","keyname":indexname,"datastring":repr(INDEX)},
+            {"event":"store_string_in_s3","keyname":"S3AppDatabase.register","datastring":repr(REGISTER)},
         ])
     return null
 
@@ -244,13 +250,13 @@ def is_range_match(number,vector):
     return number>=vector[0] and number<=vector[1]
 
 def search_index(prototype,constraints,mode="rows",value_dict={},page_size=None,this_page=None):
-    global inner_matches, SESSION_STORAGE
+    global inner_matches
     def process(array):
         global inner_matches
         inner_matches.extend(array)
         return None
     try:
-        INDEX = get_index(prototype)
+        INDEX,SESSION_STORAGE = get_index(prototype)
         REGISTER = SESSION_STORAGE["S3AppDatabase.register"]
         dataform = REGISTER[prototype]["dataform"]
         common_fields = [field for field in constraints if field in dataform and field in INDEX]
@@ -274,9 +280,9 @@ def search_index(prototype,constraints,mode="rows",value_dict={},page_size=None,
         return null
 
 def update_rows(row_ids,prototype,value_dict):
-    global INDEX,TABLE,SESSION_STORAGE,REGISTER
+    global INDEX,TABLE,REGISTER
     try:
-        TABLE,INDEX = get_table_and_index(prototype)
+        TABLE,INDEX,SESSION_STORAGE = get_table_and_index(prototype)
         REGISTER = SESSION_STORAGE["S3AppDatabase.register"]
         def update_logical_row(row_id,prototype,value_dict):
             global INDEX,TABLE
@@ -321,9 +327,8 @@ def get_dataform(prototype):
         return null
 
 def fetch_rows(prototype,row_ids):
-    global SESSION_STORAGE
     try:
-        TABLE = get_table(prototype)
+        TABLE,SESSION_STORAGE = get_table(prototype)
         REGISTER = SESSION_STORAGE["S3AppDatabase.register"]
         if prototype in REGISTER:
             if row_ids in ["*",{}]:
@@ -336,9 +341,8 @@ def fetch_rows(prototype,row_ids):
         return null
 
 def new_record(prototype,data):
-    global SESSION_STORAGE
     try:
-        TABLE,INDEX = get_table_and_index(prototype)
+        TABLE,INDEX,SESSION_STORAGE = get_table_and_index(prototype)
         REGISTER = SESSION_STORAGE["S3AppDatabase.register"]
         dataform = REGISTER[prototype]["dataform"]
         row_count = REGISTER[prototype]["row_count"]
