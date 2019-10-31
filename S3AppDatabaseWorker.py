@@ -2,7 +2,7 @@ from __future__ import division
 from flask import Flask,request,Response,after_this_request
 from flask_cors import CORS
 from flask_socketio import SocketIO
-import json,base64,cStringIO,gzip,functools,boto,datetime,sys,time
+import json,base64,cStringIO,gzip,functools,boto,datetime,sys,time,threading
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
 import requests as http
@@ -13,18 +13,11 @@ app.config['SECRET_KEY'] = "S3AppDatabaseWorker"
 CORS(app)
 socketio = SocketIO(app)
 
-global server_host, server_port, true, false, null, conn, bucket
+global server_host, server_port, true, false, null, SESSION_STORAGE
 
 # Configuration
 s3bucket_name,s3conn_user,s3conn_pass,s3region,server_host,server_port = sys.argv[1:]
-
-conn = S3Connection(s3conn_user, s3conn_pass, host="s3.%s.amazonaws.com" % s3region)
-try:
-    bucket = conn.create_bucket(s3bucket_name)
-except:
-    bucket = conn.get_bucket(s3bucket_name)
-
-true = True; false = False; null = None
+true = True; false = False; null = None; SESSION_STORAGE = {}
 
 def now():
     return str(datetime.datetime.today())
@@ -51,26 +44,35 @@ def new_id():
     hasher.update(now())
     return hasher.hexdigest()
 
-def storage_instance_key():
-    global bucket
-    return Key(bucket)
-
-def delete_key(keyname):
-    key = storage_instance_key()
-    key.key = keyname
-    key.delete()
-    return None
-
-def store_string_in_s3(keyname,stringdata):
-    key = storage_instance_key()
-    key.key = keyname
-    key.set_contents_from_string(stringdata)
-    return None
-
-def fetch_string_from_s3(keyname):
-    key = storage_instance_key()
-    key.key = keyname
-    return key.get_contents_as_string()
+def RunParallelS3Events(Events):
+    global SESSION_STORAGE
+    conn = S3Connection(s3conn_user, s3conn_pass, host="s3.%s.amazonaws.com" % s3region)
+    try:
+        bucket = conn.create_bucket(s3bucket_name)
+    except:
+        bucket = conn.get_bucket(s3bucket_name)
+    def delete_key(keyname):
+        key = Key(bucket); key.key = keyname; key.delete()
+        return None
+    def store_string_in_s3(keyname,stringdata):
+        key = Key(bucket); key.key = keyname; key.set_contents_from_string(stringdata)
+        return None
+    def fetch_string_from_s3(keyname):
+        global SESSION_STORAGE
+        key = Key(bucket); key.key = keyname
+        try:
+            SESSION_STORAGE[keyname] = eval(key.get_contents_as_string())
+        except Exception as error:
+            SESSION_STORAGE[keyname] = str(error)
+        return None
+    def to_event_config(event):
+        return {
+            "event":eval(event["event"]),
+            "args_tuple":tuple(event["params"])
+            }
+    for event in Events:
+        event_config = to_event_config(event)
+        t = threading.Thread(target = event_config["event"], args=event_config["args_tuple"]).start()
 
 def responsify(status,message,data={}):
     code = int(status)
@@ -106,70 +108,92 @@ def gzipped(f):
     return view_func
 
 def get_register():
-    # ensure Register is available
-    try:
-        REGISTER = eval(fetch_string_from_s3("S3AppDatabase.register"))
-    except Exception as error:
-        # check error message, act contextually
-        if "S3ResponseError: 404 Not Found" in str(error):
-            # create Register
-            store_string_in_s3("S3AppDatabase.register",repr({}))
-            # pull again for good measure
-            REGISTER = eval(fetch_string_from_s3("S3AppDatabase.register"))
+    global SESSION_STORAGE
+    RunParallelS3Events([
+        {"event":"fetch_string_from_s3","params":["S3AppDatabase.register"]},
+    ])
+    REGISTER = SESSION_STORAGE["S3AppDatabase.register"]
+    if "S3ResponseError: 404 Not Found" in REGISTER:
+        RunParallelS3Events([
+            {"event":"store_string_in_s3","params":["S3AppDatabase.register",repr({})]},
+        ])
+        REGISTER = {}
     return REGISTER
 
 def set_register(REGISTER):
-    store_string_in_s3("S3AppDatabase.register",repr(REGISTER))
+    RunParallelS3Events([
+        {"event":"store_string_in_s3","params":["S3AppDatabase.register",repr(REGISTER)]},
+    ])
     return null
 
 def get_index(prototype):
-    # ensure Index is available
-    REGISTER = get_register()
-    if prototype in REGISTER:
-        try:
-            indexfile = "S3AppDatabase.%s.index" % prototype
-            INDEX = eval(fetch_string_from_s3(indexfile))
-        except Exception as error:
-            # check error message, act contextually
-            if "S3ResponseError: 404 Not Found" in str(error):
-                # create Index
-                store_string_in_s3(indexfile,repr({}))
-                # pull again for good measure
-                INDEX = eval(fetch_string_from_s3(indexfile))
-        return INDEX
-    else:
+    global SESSION_STORAGE
+    indexname = "S3AppDatabase.%s.index" % prototype
+    RunParallelS3Events([
+        {"event":"fetch_string_from_s3","params":["S3AppDatabase.register"]},
+        {"event":"fetch_string_from_s3","params":[indexname]},
+    ])
+    REGISTER = SESSION_STORAGE["S3AppDatabase.register"]
+    INDEX = SESSION_STORAGE[indexname]
+    if "S3ResponseError: 404 Not Found" in REGISTER:
+        RunParallelS3Events([
+            {"event":"store_string_in_s3","params":["S3AppDatabase.register",repr({})]},
+        ])
         return null
-
-def set_index(prototype,INDEX):
-    REGISTER = get_register()
-    if prototype in REGISTER:
-        indexfile = "S3AppDatabase.%s.index" % prototype
-        store_string_in_s3(indexfile,repr(INDEX))
-    return null
+    if "S3ResponseError: 404 Not Found" in INDEX:
+        return null
+    return INDEX
 
 def get_table(prototype):
-    # ensure Table is available
-    REGISTER = get_register()
-    if prototype in REGISTER:
-        try:
-            tablefile = "S3AppDatabase.%s.table" % prototype
-            TABLE = eval(fetch_string_from_s3(tablefile))
-        except Exception as error:
-            # check error message, act contextually
-            if "S3ResponseError: 404 Not Found" in str(error):
-                # create Table
-                store_string_in_s3(tablefile,repr({}))
-                # pull again for good measure
-                TABLE = eval(fetch_string_from_s3(tablefile))
-        return TABLE
-    else:
+    global SESSION_STORAGE
+    tablename = "S3AppDatabase.%s.table" % prototype
+    RunParallelS3Events([
+        {"event":"fetch_string_from_s3","params":["S3AppDatabase.register"]},
+        {"event":"fetch_string_from_s3","params":[tablename]},
+    ])
+    REGISTER = SESSION_STORAGE["S3AppDatabase.register"]
+    TABLE = SESSION_STORAGE[tablename]
+    if "S3ResponseError: 404 Not Found" in REGISTER:
+        RunParallelS3Events([
+            {"event":"store_string_in_s3","params":["S3AppDatabase.register",repr({})]},
+        ])
         return null
+    if "S3ResponseError: 404 Not Found" in TABLE:
+        return null
+    return TABLE
 
-def set_table(prototype,TABLE):
-    REGISTER = get_register()
+def get_table_and_index(prototype):
+    global SESSION_STORAGE
+    tablename = "S3AppDatabase.%s.table" % prototype
+    indexname = "S3AppDatabase.%s.index" % prototype
+    RunParallelS3Events([
+        {"event":"fetch_string_from_s3","params":["S3AppDatabase.register"]},
+        {"event":"fetch_string_from_s3","params":[tablename]},
+        {"event":"fetch_string_from_s3","params":[indexname]},
+    ])
+    REGISTER = SESSION_STORAGE["S3AppDatabase.register"]
+    TABLE = SESSION_STORAGE[tablename]
+    INDEX = SESSION_STORAGE[indexname]
+    if "S3ResponseError: 404 Not Found" in REGISTER:
+        RunParallelS3Events([
+            {"event":"store_string_in_s3","params":["S3AppDatabase.register",repr({})]},
+        ])
+        return null,null
+    if "S3ResponseError: 404 Not Found" in TABLE:
+        TABLE = null
+    if "S3ResponseError: 404 Not Found" in INDEX:
+        INDEX = null
+    return TABLE,INDEX
+
+def set_table_and_index(prototype,TABLE,INDEX,REGISTER):
     if prototype in REGISTER:
-        tablefile = "S3AppDatabase.%s.table" % prototype
-        store_string_in_s3(tablefile,repr(TABLE))
+        tablename = "S3AppDatabase.%s.table" % prototype
+        indexname = "S3AppDatabase.%s.index" % prototype
+        RunParallelS3Events([
+            {"event":"store_string_in_s3","params":[tablename,repr(TABLE)]},
+            {"event":"store_string_in_s3","params":[indexname,repr(INDEX)]},
+            {"event":"store_string_in_s3","params":["S3AppDatabase.register",repr(REGISTER)]},
+        ])
     return null
 
 def update_prototype(prototype,dataform):
@@ -220,14 +244,14 @@ def is_range_match(number,vector):
     return number>=vector[0] and number<=vector[1]
 
 def search_index(prototype,constraints,mode="rows",value_dict={},page_size=None,this_page=None):
-    global inner_matches
-    REGISTER = get_register()
+    global inner_matches, SESSION_STORAGE
     def process(array):
         global inner_matches
         inner_matches.extend(array)
         return None
-    if prototype in REGISTER:
+    try:
         INDEX = get_index(prototype)
+        REGISTER = SESSION_STORAGE["S3AppDatabase.register"]
         dataform = REGISTER[prototype]["dataform"]
         common_fields = [field for field in constraints if field in dataform and field in INDEX]
         matches = []
@@ -246,49 +270,48 @@ def search_index(prototype,constraints,mode="rows",value_dict={},page_size=None,
             return update_rows(matches,prototype,value_dict)
         else:
             return matches
-    return null
+    except:
+        return null
 
 def update_rows(row_ids,prototype,value_dict):
-    global INDEX,TABLE
-    REGISTER = get_register()
-    if prototype in REGISTER:
-        INDEX = get_index(prototype)
-        TABLE = get_table(prototype)
-    else:
-        return null
-    def update_logical_row(row_id,prototype,value_dict):
-        global INDEX,TABLE
-        try:
-            dataform = REGISTER[prototype]["dataform"]
-            common_fields = [field for field in value_dict if field in dataform]
-            for field in common_fields:
-                TABLE[row_id][field] = value_dict[field]
-                try:
-                    for value in INDEX[field]:
-                        if row_id in INDEX[field][value]:
-                            INDEX[field][value].remove(row_id)
-                except:
-                    pass
-                new_value = value_dict[field]
-                typestr = str(type(new_value))
-                if "dict" in typestr or "list" in typestr:
-                    new_value = repr(new_value)
-                if field in INDEX:
-                    if new_value in INDEX[field]:
-                        INDEX[field][new_value].append(row_id)
+    global INDEX,TABLE,SESSION_STORAGE,REGISTER
+    try:
+        TABLE,INDEX = get_table_and_index(prototype)
+        REGISTER = SESSION_STORAGE["S3AppDatabase.register"]
+        def update_logical_row(row_id,prototype,value_dict):
+            global INDEX,TABLE
+            try:
+                dataform = REGISTER[prototype]["dataform"]
+                common_fields = [field for field in value_dict if field in dataform]
+                for field in common_fields:
+                    TABLE[row_id][field] = value_dict[field]
+                    try:
+                        for value in INDEX[field]:
+                            if row_id in INDEX[field][value]:
+                                INDEX[field][value].remove(row_id)
+                    except:
+                        pass
+                    new_value = value_dict[field]
+                    typestr = str(type(new_value))
+                    if "dict" in typestr or "list" in typestr:
+                        new_value = repr(new_value)
+                    if field in INDEX:
+                        if new_value in INDEX[field]:
+                            INDEX[field][new_value].append(row_id)
+                        else:
+                            INDEX[field][new_value] = [row_id]
                     else:
-                        INDEX[field][new_value] = [row_id]
-                else:
-                    INDEX[field] = {new_value:[row_id]}
-            # stamp record
-            TABLE[row_id]["__updated_at__"] = timestamp()
-            return row_id
-        except:
-            return null
-    result = [update_logical_row(row_id,prototype,value_dict) for row_id in row_ids]
-    set_index(prototype,INDEX)
-    set_table(prototype,TABLE)
-    return result
+                        INDEX[field] = {new_value:[row_id]}
+                # stamp record
+                TABLE[row_id]["__updated_at__"] = timestamp()
+                return row_id
+            except:
+                return null
+        result = [update_logical_row(row_id,prototype,value_dict) for row_id in row_ids]
+        set_table_and_index(prototype,TABLE,INDEX,REGISTER)
+        return result
+    except:
+        return null
 
 def get_dataform(prototype):
     REGISTER = get_register()
@@ -298,19 +321,25 @@ def get_dataform(prototype):
         return null
 
 def fetch_rows(prototype,row_ids):
-    REGISTER = get_register()
-    if prototype in REGISTER:
+    global SESSION_STORAGE
+    try:
         TABLE = get_table(prototype)
-        if row_ids == "*":
-            return [TABLE[row_id] for row_id in TABLE]
+        REGISTER = SESSION_STORAGE["S3AppDatabase.register"]
+        if prototype in REGISTER:
+            if row_ids in ["*",{}]:
+                return [TABLE[row_id] for row_id in TABLE]
+            else:
+                return [TABLE[row_id] for row_id in row_ids]
         else:
-            return [TABLE[row_id] for row_id in row_ids]
-    else:
+            return null
+    except:
         return null
 
 def new_record(prototype,data):
-    REGISTER = get_register()
-    if prototype in REGISTER:
+    global SESSION_STORAGE
+    try:
+        TABLE,INDEX = get_table_and_index(prototype)
+        REGISTER = SESSION_STORAGE["S3AppDatabase.register"]
         dataform = REGISTER[prototype]["dataform"]
         row_count = REGISTER[prototype]["row_count"]
         row_count+=1
@@ -326,10 +355,7 @@ def new_record(prototype,data):
         if prototype_id not in data:
             data[prototype_id] = new_id()
         common_fields = [field for field in data if field in dataform]
-        # update table
-        TABLE = get_table(prototype); TABLE[row_count] = {field:data[field] for field in common_fields}; set_table(prototype,TABLE)
-        # retrieve index
-        INDEX = get_index(prototype)
+        TABLE[row_count] = {field:data[field] for field in common_fields}
         # update index
         for field in common_fields:
             value = data[field]
@@ -343,12 +369,10 @@ def new_record(prototype,data):
                     INDEX[field][value] = [row_count]
             else:
                 INDEX[field] = {value:[row_count]}
-        set_index(prototype,INDEX)
-        # update row_count
         REGISTER[prototype]["row_count"] = row_count
-        set_register(REGISTER)
+        set_table_and_index(prototype,TABLE,INDEX,REGISTER)
         return data[prototype_id]
-    else:
+    except:
         return null
 
 def format_param(param):
