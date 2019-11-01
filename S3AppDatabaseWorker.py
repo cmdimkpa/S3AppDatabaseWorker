@@ -1,10 +1,7 @@
 from __future__ import division
-import eventlet
-eventlet.monkey_patch()
 from flask import Flask,request,Response,after_this_request
 from flask_cors import CORS
-from flask_socketio import SocketIO
-import json,base64,cStringIO,gzip,functools,boto,datetime,sys,time
+import json,base64,cStringIO,gzip,functools,boto,datetime,sys,time,threading
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
 import requests as http
@@ -13,7 +10,6 @@ from hashlib import md5
 app = Flask(__name__)
 app.config['SECRET_KEY'] = "S3AppDatabaseWorker"
 CORS(app)
-socketio = SocketIO(app)
 
 global server_host, server_port, true, false, null, conn, bucket
 
@@ -51,10 +47,10 @@ def new_id():
     return hasher.hexdigest()
 
 def RunParallelS3Events(Events):
-    global delete_key, store_string_in_s3, fetch_string_from_s3, SESSION_STORAGE
-    SESSION_STORAGE = {}
+    global delete_key, store_string_in_s3, fetch_string_from_s3, MESSAGES
+    MESSAGES = []
     def event_handler(event):
-        global SESSION_STORAGE
+        global MESSAGES
         try:
             def delete_key(params):
                 keyname = params[0]
@@ -65,24 +61,29 @@ def RunParallelS3Events(Events):
                 key = Key(bucket); key.key = keyname; key.set_contents_from_string(stringdata)
                 return null
             def fetch_string_from_s3(params):
-                global SESSION_STORAGE
                 keyname = params[0]
                 key = Key(bucket); key.key = keyname
                 try:
                     content = eval(key.get_contents_as_string())
                 except Exception as error:
                     content = str(error)
-                SESSION_STORAGE[keyname] = content
-                return null
+                return {keyname:content}
         except:
             return null
         params = [event["keyname"]]
         if "store_string_in_s3" in event["event"]:
             params.append(event["datastring"])
-        return eval(event["event"])(params)
-    pool = eventlet.GreenPool(size=10)
-    pool.imap(event_handler,Events)
-    return SESSION_STORAGE
+        message = eval(event["event"])(params)
+        MESSAGES.append(message)
+        return null
+    for event in Events:
+        t = threading.Thread(target=event_handler, args=(event,))
+        t.start()
+    message = [message for message in MESSAGES if message]
+    if message:
+        return message[0]
+    else:
+        return null
 
 def responsify(status,message,data={}):
     code = int(status)
@@ -524,4 +525,4 @@ def get_records():
         return responsify(400,"error clue: %s" % str(e))
 
 if __name__ == "__main__":
-    socketio.run(app,host=server_host,port=server_port)
+    app.run(host=server_host,port=server_port,threaded=true)
