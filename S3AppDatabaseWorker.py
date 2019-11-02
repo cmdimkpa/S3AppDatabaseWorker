@@ -32,18 +32,19 @@ def paginate(array,page_size,this_page):
     array_size = len(array)
     if "-" not in str(this_page):
         skip = page_size*(this_page-1); next = page_size*this_page
+        if skip < array_size:
+            try:
+                return array[skip:next]
+            except:
+                return array[skip:]
+        else:
+            return []
     else:
         skip = array_size - abs(this_page)*page_size; next = array_size - (abs(this_page)-1)*page_size
-    if skip < array_size:
         try:
-            return array[skip:skip+next]
+            return array[skip:next]
         except:
-            if "-" not in str(this_page):
-                return array[skip:]
-            else:
-                return array[:skip]
-    else:
-        return []
+            return []
 
 def new_id():
     hasher = md5()
