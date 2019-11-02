@@ -501,5 +501,39 @@ def get_records():
     except Exception as e:
         return responsify(400,"error clue: %s" % str(e))
 
+@app.route("/ods/db_test/<path:type>")
+@gzipped
+def db_test(type):
+    type = type.lower()
+    def test_post():
+        return new_record("Cars",{
+            "make":"Acura",
+            "model":"Legend",
+            "year":1998
+        })
+    try:
+        if type not in ["post","fetch","update"]:
+            return responsify(400,"load type: %s not supported" % type.upper())
+        else:
+            # ensure `Cars` test model is available
+            update_prototype("Cars",["make","model","year"]); test_post()
+            # select and run test
+            if type == "post":
+                test_result = test_post()
+            if type == "fetch":
+                test_result = search_index("Cars",{"__private__":0},"records")
+            if type == "update":
+                test_result = search_index("Cars",{
+                    "make":"Acura",
+                    "model":"Legend",
+                    "year":1998,
+                    {"__private__":0}
+                },"update",{
+                    "year":2000
+                })
+        return responsify(200,"Test Successful",test_result)
+    except Exception as e:
+        return responsify(400,"error clue: %s" % str(e))
+
 if __name__ == "__main__":
     app.run(host=server_host,port=server_port,threaded=true)
