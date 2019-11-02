@@ -20,7 +20,7 @@ try:
     bucket = conn.create_bucket(s3bucket_name)
 except:
     bucket = conn.get_bucket(s3bucket_name)
-true = True; false = False; null = None; MESSAGE_BUS = []; MESSAGE_BUS_LIMIT = 10000
+true = True; false = False; null = None; MESSAGE_BUS = []; MESSAGE_BUS_LIMIT = 500
 
 def now():
     return str(datetime.datetime.today())
@@ -94,10 +94,11 @@ def AsyncS3MessagePolling(Events):
     runtime_key = new_id(); RunParallelS3Events(Events,runtime_key); message = null
     while not message:
         sleep(0)
-        result = [entry for entry in MESSAGE_BUS if runtime_key in entry]
-        if result:
-            entry = result[0]
+        result_index = [MESSAGE_BUS.index(entry) for entry in MESSAGE_BUS if runtime_key in entry]
+        if result_index:
+            entry = MESSAGE_BUS[result_index[0]]
             if len(entry[runtime_key]) == len(Events):
+                MESSAGE_BUS.pop(result_index[0])
                 message = entry[runtime_key]
     result = [data for data in message if data]
     if result:
@@ -525,9 +526,9 @@ def db_test(type):
             if type == "post":
                 test_result = test_post()
             if type == "fetch":
-                test_result = search_index("Cars",{"__private__":[0,0]},"records",{},10000,1)
+                test_result = search_index("Cars",{"__private__":[0,0]},"records",{},1000,1)
             if type == "update":
-                test_result = search_index("Cars",{"__private__":[0,0]},"update",{"year":2000},10000,1)
+                test_result = search_index("Cars",{"__private__":[0,0]},"update",{"year":2000},1000,1)
         return responsify(200,"Test Successful",test_result)
     except Exception as e:
         return responsify(400,"error clue: %s" % str(e))
