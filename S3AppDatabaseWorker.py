@@ -12,7 +12,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = "S3AppDatabaseWorker"
 CORS(app)
 
-global server_host, server_port, true, false, null, conn, bucket, MESSAGE_BUS, MESSAGE_BUS_LIMIT
+global server_host, server_port, true, false, null, conn, bucket, MESSAGE_BUS
 
 s3bucket_name,s3conn_user,s3conn_pass,s3region,server_host,server_port = sys.argv[1:]
 conn = S3Connection(s3conn_user, s3conn_pass, host="s3.%s.amazonaws.com" % s3region)
@@ -20,7 +20,7 @@ try:
     bucket = conn.create_bucket(s3bucket_name)
 except:
     bucket = conn.get_bucket(s3bucket_name)
-true = True; false = False; null = None; MESSAGE_BUS = []; MESSAGE_BUS_LIMIT = 10000
+true = True; false = False; null = None; MESSAGE_BUS = []
 
 def now():
     return str(datetime.datetime.today())
@@ -53,7 +53,6 @@ def new_id():
 
 def RunParallelS3Events(Events,runtime_key):
     global delete_data, write_data, read_data, MESSAGE_BUS
-    MESSAGE_BUS = MESSAGE_BUS[-1*MESSAGE_BUS_LIMIT:]
     MESSAGE_BUS.append({
         runtime_key:[]
     })
