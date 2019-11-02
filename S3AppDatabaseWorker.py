@@ -527,7 +527,7 @@ def db_test(type):
                     "make":"Acura",
                     "model":"Legend",
                     "year":1998,
-                    {"__private__":0}
+                    "__private__":0
                 },"update",{
                     "year":2000
                 })
