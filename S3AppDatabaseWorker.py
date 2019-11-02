@@ -20,7 +20,7 @@ try:
     bucket = conn.create_bucket(s3bucket_name)
 except:
     bucket = conn.get_bucket(s3bucket_name)
-true = True; false = False; null = None; MESSAGE_BUS = []; MESSAGE_BUS_LIMIT = 1000000
+true = True; false = False; null = None; MESSAGE_BUS = []; MESSAGE_BUS_LIMIT = 1000
 
 def now():
     return str(datetime.datetime.today())
