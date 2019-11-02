@@ -70,8 +70,8 @@ def RunParallelS3Events(Events,runtime_key):
                 key = Key(bucket); key.key = keyname
                 try:
                     content = eval(key.get_contents_as_string())
-                except Exception as error:
-                    content = str(error)
+                except:
+                    content = {}
                 return {keyname:content}
         except:
             return null
@@ -85,7 +85,7 @@ def RunParallelS3Events(Events,runtime_key):
         t = threading.Thread(target=event_handler, args=(event,))
         t.start()
 
-def AsyncMessagePolling(Events):
+def AsyncS3MessagePolling(Events):
     global MESSAGE_BUS
     runtime_key = new_id(); RunParallelS3Events(Events,runtime_key); message = null
     while not message:
@@ -136,55 +136,41 @@ def gzipped(f):
     return view_func
 
 def get_register():
-    Message = AsyncMessagePolling([
+    Message = AsyncS3MessagePolling([
         {"event":"read_data","keyname":"S3AppDatabase.register"},
     ])
     REGISTER = Message["S3AppDatabase.register"]
-    if "S3ResponseError: 404 Not Found" in REGISTER:
-        AsyncMessagePolling([
+    if not REGISTER:
+        AsyncS3MessagePolling([
             {"event":"write_data","keyname":"S3AppDatabase.register","datastring":repr({})},
         ])
         REGISTER = {}
     return REGISTER
 
 def set_register(REGISTER):
-    AsyncMessagePolling([
+    AsyncS3MessagePolling([
         {"event":"write_data","keyname":"S3AppDatabase.register","datastring":repr(REGISTER)},
     ])
     return null
 
-def get_index(prototype):
-    indexname = str("S3AppDatabase.%s.index" % prototype)
-    Message = AsyncMessagePolling([
-        {"event":"read_data","keyname":"S3AppDatabase.register"},
-        {"event":"read_data","keyname":indexname},
-    ])
-    REGISTER = Message["S3AppDatabase.register"]
-    INDEX = Message[indexname]
-    if "S3ResponseError: 404 Not Found" in REGISTER:
-        AsyncMessagePolling([
-            {"event":"write_data","keyname":"S3AppDatabase.register", "datastring":repr({})},
-        ])
-    return INDEX,Message
-
 def get_table(prototype):
     tablename = str("S3AppDatabase.%s.table" % prototype)
-    Message = AsyncMessagePolling([
+    Message = AsyncS3MessagePolling([
         {"event":"read_data","keyname":"S3AppDatabase.register"},
         {"event":"read_data","keyname":tablename},
     ])
     REGISTER = Message["S3AppDatabase.register"]
     TABLE = Message[tablename]
-    if "S3ResponseError: 404 Not Found" in REGISTER:
-        AsyncMessagePolling([
+    if not REGISTER:
+        AsyncS3MessagePolling([
             {"event":"write_data","keyname":"S3AppDatabase.register", "datastring":repr({})},
         ])
-    return TABLE,Message
+    return TABLE,REGISTER
 
 def get_table_and_index(prototype):
     tablename = str("S3AppDatabase.%s.table" % prototype)
     indexname = str("S3AppDatabase.%s.index" % prototype)
-    Message = AsyncMessagePolling([
+    Message = AsyncS3MessagePolling([
         {"event":"read_data","keyname":"S3AppDatabase.register"},
         {"event":"read_data","keyname":tablename},
         {"event":"read_data","keyname":indexname},
@@ -192,17 +178,17 @@ def get_table_and_index(prototype):
     REGISTER = Message["S3AppDatabase.register"]
     TABLE = Message[tablename]
     INDEX = Message[indexname]
-    if "S3ResponseError: 404 Not Found" in REGISTER:
-        AsyncMessagePolling([
-            {"event":"write_data","keyname":"S3AppDatabase.register", "datastring":repr({})},
+    if not REGISTER:
+        AsyncS3MessagePolling([
+            {"event":"write_data","keyname":"S3AppDatabase.register","datastring":repr({})}
         ])
-    return TABLE,INDEX,Message
+    return TABLE,INDEX,REGISTER
 
 def set_table_and_index(prototype,TABLE,INDEX,REGISTER):
     if prototype in REGISTER:
         tablename = str("S3AppDatabase.%s.table" % prototype)
         indexname = str("S3AppDatabase.%s.index" % prototype)
-        AsyncMessagePolling([
+        AsyncS3MessagePolling([
             {"event":"write_data","keyname":tablename,"datastring":repr(TABLE)},
             {"event":"write_data","keyname":indexname,"datastring":repr(INDEX)},
             {"event":"write_data","keyname":"S3AppDatabase.register","datastring":repr(REGISTER)},
@@ -263,8 +249,7 @@ def search_index(prototype,constraints,mode="rows",value_dict={},page_size=None,
         inner_matches.extend(array)
         return None
     try:
-        TABLE,INDEX,Message = get_table_and_index(prototype)
-        REGISTER = Message["S3AppDatabase.register"]
+        TABLE,INDEX,REGISTER = get_table_and_index(prototype)
         dataform = REGISTER[prototype]["dataform"]
         common_fields = [field for field in constraints if field in dataform and field in INDEX]
         matches = []
@@ -332,8 +317,7 @@ def get_dataform(prototype):
 
 def fetch_rows(prototype,row_ids):
     try:
-        TABLE,Message = get_table(prototype)
-        REGISTER = Message["S3AppDatabase.register"]
+        TABLE,REGISTER = get_table(prototype)
         if prototype in REGISTER:
             if row_ids in ["*",{}]:
                 return [TABLE[row_id] for row_id in TABLE]
@@ -346,17 +330,13 @@ def fetch_rows(prototype,row_ids):
 
 def new_record(prototype,data):
     try:
-        TABLE,INDEX,Message = get_table_and_index(prototype)
-        REGISTER = Message["S3AppDatabase.register"]
+        TABLE,INDEX,REGISTER = get_table_and_index(prototype)
         dataform = REGISTER[prototype]["dataform"]
         row_count = REGISTER[prototype]["row_count"]
         row_count+=1
-        # stamp record
         data["__created_at__"] = timestamp()
         data["__updated_at__"] = null
-        # make record public
         data["__private__"] = 0
-        # add row_id and prototype_id if necessary
         prototype_id = "%s_id" % prototype
         if "row_id" not in data:
             data["row_id"] = row_count
@@ -364,7 +344,6 @@ def new_record(prototype,data):
             data[prototype_id] = new_id()
         common_fields = [field for field in data if field in dataform]
         TABLE[row_count] = {field:data[field] for field in common_fields}
-        # update index
         for field in common_fields:
             value = data[field]
             typestr = str(type(value))
@@ -491,8 +470,8 @@ def rrc(prototype):
         register = get_register()
         if prototype in register:
             register[prototype]["row_count"] = 0
-            AsyncMessagePolling([
-                {"event":"write_data","keyname":"S3AppDatabase.register","datastring":repr(register)}
+            AsyncS3MessagePolling([
+                {"event":"write_data","keyname":"S3AppDatabase.register","datastring":repr(register)},
                 {"event":"delete_data","keyname":str("S3AppDatabase.%s.index" % prototype)},
                 {"event":"delete_data","keyname":str("S3AppDatabase.%s.table" % prototype)},
             ])
