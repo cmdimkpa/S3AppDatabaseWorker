@@ -271,7 +271,9 @@ def search_index(prototype,constraints,mode="rows",value_dict={},page_size=None,
     except:
         return null
 
-def update_rows(INDEX,TABLE,REGISTER,row_ids,prototype,value_dict):
+def update_rows(index,table,register,row_ids,prototype,value_dict):
+    global INDEX,TABLE,REGISTER
+    INDEX=index; TABLE=table; REGISTER=register
     try:
         def update_logical_row(row_id,prototype,value_dict):
             global INDEX,TABLE
@@ -297,12 +299,11 @@ def update_rows(INDEX,TABLE,REGISTER,row_ids,prototype,value_dict):
                             INDEX[field][new_value] = [row_id]
                     else:
                         INDEX[field] = {new_value:[row_id]}
-                # stamp record
                 TABLE[row_id]["__updated_at__"] = timestamp()
                 return row_id
             except:
                 return null
-        result = [update_logical_row(row_id,prototype,value_dict) for row_id in row_ids]
+        result = [x for x in [update_logical_row(row_id,prototype,value_dict) for row_id in row_ids] if x]
         set_table_and_index(prototype,TABLE,INDEX,REGISTER)
         return [TABLE[row_id] for row_id in result]
     except:
