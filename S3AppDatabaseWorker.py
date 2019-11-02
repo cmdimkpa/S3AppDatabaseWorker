@@ -521,16 +521,9 @@ def db_test(type):
             if type == "post":
                 test_result = test_post()
             if type == "fetch":
-                test_result = search_index("Cars",{"__private__":0},"records")
+                test_result = search_index("Cars",{"__private__":[0,0]},"records",{},10000,1)
             if type == "update":
-                test_result = search_index("Cars",{
-                    "make":"Acura",
-                    "model":"Legend",
-                    "year":1998,
-                    "__private__":0
-                },"update",{
-                    "year":2000
-                })
+                test_result = search_index("Cars",{"__private__":[0,0]},"update",{"year":2000},10000,1)
         return responsify(200,"Test Successful",test_result)
     except Exception as e:
         return responsify(400,"error clue: %s" % str(e))
