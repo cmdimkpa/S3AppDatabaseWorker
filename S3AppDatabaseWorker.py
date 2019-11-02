@@ -20,7 +20,7 @@ try:
     bucket = conn.create_bucket(s3bucket_name)
 except:
     bucket = conn.get_bucket(s3bucket_name)
-true = True; false = False; null = None; MESSAGE_BUS = []; MESSAGE_BUS_LIMIT = 1000
+true = True; false = False; null = None; MESSAGE_BUS = []; MESSAGE_BUS_LIMIT = 10000
 
 def now():
     return str(datetime.datetime.today())
@@ -28,19 +28,22 @@ def now():
 def timestamp():
     return int(time.time())
 
-def paginate(array,page_size=None,this_page=None):
-    if page_size and this_page:
-        array_size = len(array); page_size = int(page_size); this_page = int(this_page) - 1
-        try:
-            max_pages = len(array)//page_size
-            if this_page > max_pages:
-                return []
-            else:
-                return array[this_page*page_size:(this_page+1)*page_size]
-        except:
-            return []
+def paginate(array,page_size,this_page):
+    array_size = len(array)
+    if "-" not in str(this_page):
+        skip = page_size*(this_page-1); next = page_size*this_page
     else:
-        return array
+        skip = array_size - abs(this_page)*page_size; next = array_size - (abs(this_page)-1)*page_size
+    if skip < array_size:
+        try:
+            return array[skip:skip+next]
+        except:
+            if "-" not in str(this_page):
+                return array[skip:]
+            else:
+                return array[:skip]
+    else:
+        return []
 
 def new_id():
     hasher = md5()
