@@ -89,7 +89,7 @@ class SimpleQueue():
         self.unfinished_tasks-=1
     def join(self):
         while self.unfinished_tasks>0:
-            pass
+            time.sleep(0)
 
 class NetworkEventProcessor(Thread):
     global MESSAGE_BUS, EVENT_QUEUE_SYSTEM
