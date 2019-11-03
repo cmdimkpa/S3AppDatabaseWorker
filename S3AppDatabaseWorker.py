@@ -13,7 +13,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = "S3AppDatabaseWorker"
 CORS(app)
 
-global server_host, server_port, true, false, null, conn, bucket
+global server_host, server_port, true, false, null, conn, bucket, MESSAGE_BUS
 
 s3bucket_name,s3conn_user,s3conn_pass,s3region,server_host,server_port = sys.argv[1:]
 conn = S3Connection(s3conn_user, s3conn_pass, host="s3.%s.amazonaws.com" % s3region)
@@ -21,7 +21,7 @@ try:
     bucket = conn.create_bucket(s3bucket_name)
 except:
     bucket = conn.get_bucket(s3bucket_name)
-true = True; false = False; null = None
+true = True; false = False; null = None; MESSAGE_BUS = {}
 
 def now():
     return str(datetime.datetime.today())
@@ -52,7 +52,7 @@ def new_id():
     hasher.update(now())
     return hasher.hexdigest()
 
-def event_handler(event):
+def network_event_handler(event):
     try:
         def delete_data(params):
             keyname = params[0]
@@ -78,32 +78,34 @@ def event_handler(event):
     return eval(event["event"])(params)
 
 class NetworkEventProcessor(Thread):
-    def __init__(self, event_queue):
+    global MESSAGE_BUS
+    def __init__(self, event_queue, slot_key):
         Thread.__init__(self)
         self.event_queue = event_queue
-        self.message = []
+        self.slot_key = slot_key
+        MESSAGE_BUS[self.slot_key] = []
     def run(self):
         while True:
             event = self.event_queue.get()
             try:
-                self.message.append(event_handler(event))
+                MESSAGE_BUS[self.slot_key].append(network_event_handler(event))
             finally:
                 self.event_queue.task_done()
 
-def RunParallelS3Events(Events):
+def RunParallelS3Events(Events,slot_key):
+    global MESSAGE_BUS
     event_queue = Queue()
     for x in range(8):
-        NetworkAgent = NetworkEventProcessor(event_queue)
+        NetworkAgent = NetworkEventProcessor(event_queue,slot_key)
         NetworkAgent.daemon = True; NetworkAgent.start()
     for event in Events:
         event_queue.put(event)
     event_queue.join()
-    return NetworkAgent.message
 
 def AsyncS3MessagePolling(Events):
-    message = RunParallelS3Events(Events)
-    print(message)
-    result = [data for data in message if data]
+    global MESSAGE_BUS
+    slot_key = new_id(); RunParallelS3Events(Events,slot_key)
+    result = [data for data in MESSAGE_BUS[slot_key] if data]
     if result:
         message = {entry.keys()[0]:entry[entry.keys()[0]] for entry in result}
     else:
