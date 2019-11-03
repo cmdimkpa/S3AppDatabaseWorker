@@ -7,7 +7,7 @@ from boto.s3.key import Key
 import requests as http
 from hashlib import md5
 from threading import Thread
-from Queue import Queue
+from Queue import Queue1
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = "S3AppDatabaseWorker"
