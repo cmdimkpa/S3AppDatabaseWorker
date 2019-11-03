@@ -105,7 +105,8 @@ def RunParallelS3Events(Events,slot_key):
 def AsyncS3MessagePolling(Events):
     global MESSAGE_BUS
     slot_key = new_id(); RunParallelS3Events(Events,slot_key)
-    result = [data for data in MESSAGE_BUS[slot_key] if data]
+    Message = MESSAGE_BUS[slot_key]; del MESSAGE_BUS[slot_key]
+    result = [data for data in Message if data]
     if result:
         message = {entry.keys()[0]:entry[entry.keys()[0]] for entry in result}
     else:
