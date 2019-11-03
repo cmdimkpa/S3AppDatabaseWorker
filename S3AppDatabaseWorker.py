@@ -1,7 +1,7 @@
 from __future__ import division
 from flask import Flask,request,Response,after_this_request
 from flask_cors import CORS
-import json,base64,cStringIO,gzip,functools,boto,datetime,sys,time
+import json,base64,cStringIO,gzip,functools,boto,datetime,sys,time,gc
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
 import requests as http
@@ -99,12 +99,12 @@ def RunParallelS3Events(Events,slot_key):
     NetworkAgent.daemon = True; NetworkAgent.start()
     for event in Events:
         event_queue.put(event)
-    event_queue.join(); del NetworkAgent; del event_queue
+    event_queue.join(); del NetworkAgent; del event_queue; gc.collect()
 
 def AsyncS3MessagePolling(Events):
     global MESSAGE_BUS
     slot_key = new_id(); RunParallelS3Events(Events,slot_key)
-    Message = MESSAGE_BUS[slot_key]; del MESSAGE_BUS[slot_key]
+    Message = MESSAGE_BUS[slot_key]; del MESSAGE_BUS[slot_key]; gc.collect()
     result = [data for data in Message if data]
     if result:
         message = {entry.keys()[0]:entry[entry.keys()[0]] for entry in result}
