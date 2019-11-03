@@ -7,7 +7,6 @@ from boto.s3.key import Key
 import requests as http
 from hashlib import md5
 from threading import Thread
-from queue import Queue
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = "S3AppDatabaseWorker"
@@ -51,6 +50,14 @@ def new_id():
     hasher = md5()
     hasher.update(now())
     return hasher.hexdigest()
+
+class Queue:
+    def __init__(self):
+        self.queue = []
+    def put(self,item):
+        self.queue.insert(0,item)
+    def get(self):
+        return self.queue.pop()
 
 def event_handler(event):
     try:
