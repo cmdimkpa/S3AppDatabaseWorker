@@ -89,18 +89,24 @@ def RunParallelS3Events(Events,runtime_key):
         t.start()
 
 def AsyncS3MessagePolling(Events):
-    global MESSAGE_BUS
-    runtime_key = new_id(); RunParallelS3Events(Events,runtime_key); message = null
-    max_poll_secs = 3; poll_delay_secs = 0.1; max_polls = max_poll_secs // poll_delay_secs; current_polls = 0
-    while not message and current_polls < max_polls:
+    global MESSAGE_BUS, current_polls, poll_delay_secs
+    def scan():
+        global current_polls
         sleep(poll_delay_secs)
         current_polls+=1
+    runtime_key = new_id(); RunParallelS3Events(Events,runtime_key); message = null
+    max_poll_secs = 3; poll_delay_secs = 0.05; max_polls = max_poll_secs // poll_delay_secs; current_polls = 0
+    while not message and current_polls < max_polls:
         result_index = [MESSAGE_BUS.index(entry) for entry in MESSAGE_BUS if runtime_key in entry]
         if result_index:
             entry = MESSAGE_BUS[result_index[0]]
             if len(entry[runtime_key]) == len(Events):
                 MESSAGE_BUS.pop(result_index[0])
                 message = entry[runtime_key]
+            else:
+                scan()
+        else:
+            scan()
     if message:
         result = [data for data in message if data]
         if result:
