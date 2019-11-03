@@ -13,7 +13,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = "S3AppDatabaseWorker"
 CORS(app)
 
-global server_host, server_port, true, false, null, conn, bucket, MESSAGE_BUS
+global server_host, server_port, true, false, null, conn, bucket, MESSAGE_BUS, MESSAGE_BUS_LOCKED
 
 s3bucket_name,s3conn_user,s3conn_pass,s3region,server_host,server_port = sys.argv[1:]
 conn = S3Connection(s3conn_user, s3conn_pass, host="s3.%s.amazonaws.com" % s3region)
@@ -21,7 +21,7 @@ try:
     bucket = conn.create_bucket(s3bucket_name)
 except:
     bucket = conn.get_bucket(s3bucket_name)
-true = True; false = False; null = None; MESSAGE_BUS = []
+true = True; false = False; null = None; MESSAGE_BUS = []; MESSAGE_BUS_LOCKED = false
 
 def now():
     return str(datetime.datetime.today())
@@ -94,15 +94,23 @@ def random_delay_secs():
     return min_delay_secs+random()*(max_delay_secs - min_delay_secs)
 
 def AsyncS3MessagePolling(Events):
-    global MESSAGE_BUS
+    global MESSAGE_BUS, MESSAGE_BUS_LOCKED
     runtime_key = new_id(); RunParallelS3Events(Events,runtime_key); message = null
     while not message:
-        sleep(random_delay_secs())
-        result_index = [MESSAGE_BUS.index(entry) for entry in MESSAGE_BUS if runtime_key in entry]
-        if result_index:
-            entry = MESSAGE_BUS[result_index[0]]
-            if len(entry[runtime_key]) == len(Events):
-                message = MESSAGE_BUS.pop(result_index[0])[runtime_key]
+        if not MESSAGE_BUS_LOCKED:
+            MESSAGE_BUS_LOCKED = true
+            result_index = [MESSAGE_BUS.index(entry) for entry in MESSAGE_BUS if runtime_key in entry]
+            if result_index:
+                entry = MESSAGE_BUS[result_index[0]]
+                if len(entry[runtime_key]) == len(Events):
+                    Message = MESSAGE_BUS.pop(result_index[0])[runtime_key]
+                    MESSAGE_BUS_LOCKED = false; message = Message
+                else:
+                    MESSAGE_BUS_LOCKED = false
+            else:
+                MESSAGE_BUS_LOCKED = false
+        else:
+            sleep(random_delay_secs())
     result = [data for data in message if data]
     if result:
         message = {entry.keys()[0]:entry[entry.keys()[0]] for entry in result}
