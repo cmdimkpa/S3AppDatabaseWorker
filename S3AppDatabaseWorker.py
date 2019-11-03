@@ -95,12 +95,11 @@ class NetworkEventProcessor(Thread):
 def RunParallelS3Events(Events,slot_key):
     global MESSAGE_BUS
     event_queue = Queue()
-    for x in range(len(Events)):
-        NetworkAgent = NetworkEventProcessor(event_queue,slot_key)
-        NetworkAgent.daemon = True; NetworkAgent.start()
+    NetworkAgent = NetworkEventProcessor(event_queue,slot_key)
+    NetworkAgent.daemon = True; NetworkAgent.start()
     for event in Events:
         event_queue.put(event)
-    event_queue.join()
+    event_queue.join(); del NetworkAgent; del event_queue
 
 def AsyncS3MessagePolling(Events):
     global MESSAGE_BUS
