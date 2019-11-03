@@ -96,10 +96,10 @@ def AsyncS3MessagePolling(Events):
         if not result_index:
             return false
         else:
-            entry = MESSAGE_BUS[result_index[0]]
+            result_index = result_index[0]
+            entry = MESSAGE_BUS[result_index]
             if len(entry[runtime_key]) == len(Events):
-                message = MESSAGE_BUS.pop(result_index[0])
-                print(message)
+                message = MESSAGE_BUS.pop(result_index)
                 result = [data for data in message if data]
                 if result:
                     Message = {entry.keys()[0]:entry[entry.keys()[0]] for entry in result}
@@ -108,7 +108,7 @@ def AsyncS3MessagePolling(Events):
                 return true
             else:
                 return false
-    runtime_key = new_id(); Message = null; RunParallelS3Events(Events,runtime_key)
+    runtime_key = new_id(); Message = null; RunParallelS3Events(Events,runtime_key); sleep(0)
     while not completed():
         sleep(0)
     return Message
