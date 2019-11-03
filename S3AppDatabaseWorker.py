@@ -7,7 +7,6 @@ from boto.s3.key import Key
 import requests as http
 from hashlib import md5
 from threading import Thread
-from Queue import Queue
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = "S3AppDatabaseWorker"
@@ -77,13 +76,28 @@ def network_event_handler(event):
         params.append(event["datastring"])
     return eval(event["event"])(params)
 
+class SimpleQueue():
+    def __init__(self):
+        self.queue = []
+        self.unfinished_tasks = 0
+    def put(self,task):
+        self.queue.insert(0,task)
+        self.unfinished_tasks+=1
+    def get(self):
+        return self.queue.pop()
+    def task_done(self):
+        self.unfinished_tasks-=1
+    def join(self):
+        while self.unfinished_tasks>0:
+            pass
+
 class NetworkEventProcessor(Thread):
     global MESSAGE_BUS, EVENT_QUEUE_SYSTEM
     def __init__(self, slot_key):
         Thread.__init__(self)
         self.slot_key = slot_key
         MESSAGE_BUS[self.slot_key] = []
-        EVENT_QUEUE_SYSTEM[self.slot_key] = Queue()
+        EVENT_QUEUE_SYSTEM[self.slot_key] = SimpleQueue()
     def run(self):
         while True:
             event = EVENT_QUEUE_SYSTEM[self.slot_key].get()
