@@ -95,7 +95,7 @@ def AsyncS3MessagePolling(Events):
         sleep(poll_delay_secs)
         current_polls+=1
     runtime_key = new_id(); RunParallelS3Events(Events,runtime_key); message = null
-    max_poll_secs = 3; poll_delay_secs = 0.05; max_polls = max_poll_secs // poll_delay_secs; current_polls = 0
+    max_poll_secs = 3; poll_delay_secs = 0.3; max_polls = max_poll_secs // poll_delay_secs; current_polls = 0
     while not message and current_polls < max_polls:
         result_index = [MESSAGE_BUS.index(entry) for entry in MESSAGE_BUS if runtime_key in entry]
         if result_index:
