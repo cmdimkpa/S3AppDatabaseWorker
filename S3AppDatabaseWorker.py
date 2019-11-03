@@ -89,32 +89,21 @@ def RunParallelS3Events(Events,runtime_key):
         t.start()
 
 def AsyncS3MessagePolling(Events):
-    global MESSAGE_BUS, Message, runtime_key
-    runtime_key = new_id(); Message = null; RunParallelS3Events(Events,runtime_key)
-    def completed():
-        global MESSAGE_BUS, Message
-        try:
-            result_index = [MESSAGE_BUS.index(entry) for entry in MESSAGE_BUS if runtime_key in entry]
-            if not result_index:
-                return false
-            else:
-                result_index = result_index[0]
-                entry = MESSAGE_BUS[result_index]
-                if len(entry[runtime_key]) == len(Events):
-                    message = MESSAGE_BUS.pop(result_index)
-                    result = [data for data in message if data]
-                    if result:
-                        Message = {entry.keys()[0]:entry[entry.keys()[0]] for entry in result}
-                    else:
-                        Message = null
-                    return true
-                else:
-                    return false
-        except:
-            return false
-    while not completed():
+    global MESSAGE_BUS
+    runtime_key = new_id(); RunParallelS3Events(Events,runtime_key); message = null
+    while not message:
         sleep(0)
-    return Message
+        result_index = [MESSAGE_BUS.index(entry) for entry in MESSAGE_BUS if runtime_key in entry]
+        if result_index:
+            entry = MESSAGE_BUS[result_index[0]]
+            if len(entry[runtime_key]) == len(Events):
+                message = MESSAGE_BUS.pop(result_index[0])[runtime_key]
+    result = [data for data in message if data]
+    if result:
+        message = {entry.keys()[0]:entry[entry.keys()[0]] for entry in result}
+    else:
+        message = null
+    return message
 
 def responsify(status,message,data={}):
     code = int(status)
