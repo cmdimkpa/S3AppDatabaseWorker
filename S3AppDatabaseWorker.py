@@ -92,7 +92,7 @@ def AsyncS3MessagePolling(Events):
     global MESSAGE_BUS
     runtime_key = new_id(); RunParallelS3Events(Events,runtime_key); message = null
     while not message:
-        sleep(0)
+        sleep(0.01)
         result_index = [MESSAGE_BUS.index(entry) for entry in MESSAGE_BUS if runtime_key in entry]
         if result_index:
             entry = MESSAGE_BUS[result_index[0]]
