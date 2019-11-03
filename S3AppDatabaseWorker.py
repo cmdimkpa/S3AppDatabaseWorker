@@ -79,16 +79,12 @@ def network_event_handler(event):
 class SimpleQueue():
     def __init__(self):
         self.queue = []
-        self.unfinished_tasks = 0
     def put(self,task):
         self.queue.insert(0,task)
-        self.unfinished_tasks+=1
     def get(self):
         return self.queue.pop()
-    def task_done(self):
-        self.unfinished_tasks-=1
     def join(self):
-        while self.unfinished_tasks>0:
+        while self.queue:
             time.sleep(0.1)
 
 class NetworkEventProcessor(Thread):
@@ -104,7 +100,7 @@ class NetworkEventProcessor(Thread):
             try:
                 MESSAGE_BUS[self.slot_key].append(network_event_handler(event))
             finally:
-                EVENT_QUEUE_SYSTEM[self.slot_key].task_done()
+                pass
 
 def RunParallelS3Events(Events,slot_key):
     global MESSAGE_BUS, EVENT_QUEUE_SYSTEM
