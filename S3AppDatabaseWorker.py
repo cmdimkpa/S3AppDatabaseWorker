@@ -90,7 +90,7 @@ def RunParallelS3Events(Events,runtime_key):
         t.start()
 
 def random_delay_secs():
-    min_delay_secs = 0.05; max_delay_secs = 0.1
+    min_delay_secs = 0.1; max_delay_secs = 0.2
     return min_delay_secs+random()*(max_delay_secs - min_delay_secs)
 
 def AsyncS3MessagePolling(Events):
