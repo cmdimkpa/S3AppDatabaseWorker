@@ -101,7 +101,9 @@ def RunParallelS3Events(Events):
     return NetworkAgent.message
 
 def AsyncS3MessagePolling(Events):
-    result = [data for data in RunParallelS3Events(Events) if data]
+    message = RunParallelS3Events(Events)
+    print(message)
+    result = [data for data in message if data]
     if result:
         message = {entry.keys()[0]:entry[entry.keys()[0]] for entry in result}
     else:
