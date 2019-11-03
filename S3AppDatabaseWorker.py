@@ -99,9 +99,9 @@ def AsyncS3MessagePolling(Events):
             entry = MESSAGE_BUS[result_index[0]]
             if len(entry[runtime_key]) == len(Events):
                 message = MESSAGE_BUS.pop(result_index[0])
+                print(message)
                 result = [data for data in message if data]
                 if result:
-                    print(result)
                     Message = {entry.keys()[0]:entry[entry.keys()[0]] for entry in result}
                 else:
                     Message = null
