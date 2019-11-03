@@ -95,7 +95,7 @@ class NetworkEventProcessor(Thread):
 def RunParallelS3Events(Events,slot_key):
     global MESSAGE_BUS
     event_queue = Queue()
-    for x in range(8):
+    for x in range(len(Events)):
         NetworkAgent = NetworkEventProcessor(event_queue,slot_key)
         NetworkAgent.daemon = True; NetworkAgent.start()
     for event in Events:
