@@ -1,19 +1,19 @@
 from __future__ import division
 from flask import Flask,request,Response,after_this_request
 from flask_cors import CORS
-import json,base64,cStringIO,gzip,functools,boto,datetime,sys,time,threading
+import json,base64,cStringIO,gzip,functools,boto,datetime,sys,time
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
 import requests as http
 from hashlib import md5
-from time import sleep
-from random import random
+from threading import Thread
+from queue import Queue
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = "S3AppDatabaseWorker"
 CORS(app)
 
-global server_host, server_port, true, false, null, conn, bucket, MESSAGE_BUS
+global server_host, server_port, true, false, null, conn, bucket
 
 s3bucket_name,s3conn_user,s3conn_pass,s3region,server_host,server_port = sys.argv[1:]
 conn = S3Connection(s3conn_user, s3conn_pass, host="s3.%s.amazonaws.com" % s3region)
@@ -21,7 +21,7 @@ try:
     bucket = conn.create_bucket(s3bucket_name)
 except:
     bucket = conn.get_bucket(s3bucket_name)
-true = True; false = False; null = None; MESSAGE_BUS = []
+true = True; false = False; null = None
 
 def now():
     return str(datetime.datetime.today())
@@ -52,58 +52,56 @@ def new_id():
     hasher.update(now())
     return hasher.hexdigest()
 
-def RunParallelS3Events(Events,runtime_key):
-    global delete_data, write_data, read_data, MESSAGE_BUS
-    MESSAGE_BUS.append({
-        runtime_key:[]
-    })
-    message_index = len(MESSAGE_BUS) - 1
-    def event_handler(event):
-        global MESSAGE_BUS
-        try:
-            def delete_data(params):
-                keyname = params[0]
-                key = Key(bucket); key.key = keyname; key.delete()
-                return null
-            def write_data(params):
-                keyname,stringdata = params
-                key = Key(bucket); key.key = keyname; key.set_contents_from_string(stringdata)
-                return null
-            def read_data(params):
-                keyname = params[0]
-                key = Key(bucket); key.key = keyname
-                try:
-                    content = eval(key.get_contents_as_string())
-                except:
-                    content = {}
-                return {keyname:content}
-        except:
+def event_handler(event):
+    try:
+        def delete_data(params):
+            keyname = params[0]
+            key = Key(bucket); key.key = keyname; key.delete()
             return null
-        params = [event["keyname"]]
-        if "write_data" in event["event"]:
-            params.append(event["datastring"])
-        message = eval(event["event"])(params)
-        MESSAGE_BUS[message_index][runtime_key].append(message)
+        def write_data(params):
+            keyname,stringdata = params
+            key = Key(bucket); key.key = keyname; key.set_contents_from_string(stringdata)
+            return null
+        def read_data(params):
+            keyname = params[0]
+            key = Key(bucket); key.key = keyname
+            try:
+                content = eval(key.get_contents_as_string())
+            except:
+                content = {}
+            return {keyname:content}
+    except:
         return null
-    for event in Events:
-        t = threading.Thread(target=event_handler, args=(event,))
-        t.start()
+    params = [event["keyname"]]
+    if "write_data" in event["event"]:
+        params.append(event["datastring"])
+    return eval(event["event"])(params)
 
-def random_delay_secs():
-    min_delay_secs = 0; max_delay_secs = 0.1
-    return min_delay_secs+random()*(max_delay_secs - min_delay_secs)
+class NetworkEventProcessor(Thread):
+    def __init__(self, event_queue):
+        Thread.__init__(self)
+        self.event_queue = event_queue
+        self.message = []
+    def run(self):
+        while True:
+            event = self.event_queue.get()
+            try:
+                self.message.append(event_handler(event))
+            finally:
+                self.event_queue.task_done()
+
+def RunParallelS3Events(Events):
+    event_queue = Queue()
+    for x in range(8):
+        NetworkAgent = NetworkEventProcessor(event_queue)
+        NetworkAgent.daemon = True; NetworkAgent.start()
+    for event in Events:
+        event_queue.put(event)
+    event_queue.join()
+    return NetworkAgent.message
 
 def AsyncS3MessagePolling(Events):
-    global MESSAGE_BUS
-    runtime_key = new_id(); RunParallelS3Events(Events,runtime_key); message = null
-    while not message:
-        sleep(random_delay_secs())
-        result_index = [MESSAGE_BUS.index(entry) for entry in MESSAGE_BUS if runtime_key in entry]
-        if result_index:
-            entry = MESSAGE_BUS[result_index[0]]
-            if len(entry[runtime_key]) == len(Events):
-                message = MESSAGE_BUS.pop(result_index[0])[runtime_key]
-    result = [data for data in message if data]
+    result = [data for data in RunParallelS3Events(Events) if data]
     if result:
         message = {entry.keys()[0]:entry[entry.keys()[0]] for entry in result}
     else:
