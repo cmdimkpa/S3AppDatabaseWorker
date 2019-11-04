@@ -7,6 +7,7 @@ from boto.s3.key import Key
 import requests as http
 from hashlib import md5
 from threading import Thread
+from Queue import Queue
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = "S3AppDatabaseWorker"
@@ -76,32 +77,20 @@ def network_event_handler(event):
         params.append(event["datastring"])
     return eval(event["event"])(params)
 
-class SimpleQueue():
-    def __init__(self):
-        self.queue = []
-    def put(self,task):
-        self.queue.insert(0,task)
-    def get(self):
-        try:
-            return self.queue.pop()
-        except:
-            return null
-
 class NetworkEventProcessor(Thread):
     global MESSAGE_BUS, EVENT_QUEUE_SYSTEM
     def __init__(self, slot_key):
         Thread.__init__(self)
         self.slot_key = slot_key
         MESSAGE_BUS[self.slot_key] = []
-        EVENT_QUEUE_SYSTEM[self.slot_key] = SimpleQueue()
+        EVENT_QUEUE_SYSTEM[self.slot_key] = Queue()
     def run(self):
         while self.slot_key in EVENT_QUEUE_SYSTEM and self.slot_key in MESSAGE_BUS:
+            event = EVENT_QUEUE_SYSTEM[self.slot_key].get()
             try:
-                event = EVENT_QUEUE_SYSTEM[self.slot_key].get()
-                if event:
-                    MESSAGE_BUS[self.slot_key].append(network_event_handler(event))
-            except:
-                pass
+                MESSAGE_BUS[self.slot_key].append(network_event_handler(event))
+            finally:
+                EVENT_QUEUE_SYSTEM[self.slot_key].task_done()
 
 def RunParallelS3Events(Events,slot_key):
     global MESSAGE_BUS, EVENT_QUEUE_SYSTEM
@@ -110,11 +99,12 @@ def RunParallelS3Events(Events,slot_key):
         NetworkAgent.daemon = True; NetworkAgent.start()
     for event in Events:
         EVENT_QUEUE_SYSTEM[slot_key].put(event)
+    EVENT_QUEUE_SYSTEM[slot_key].join()
 
 def AsyncS3MessagePolling(Events):
     global MESSAGE_BUS, EVENT_QUEUE_SYSTEM
     slot_key = new_id(); RunParallelS3Events(Events,slot_key)
-    Message = MESSAGE_BUS[slot_key]#; del MESSAGE_BUS[slot_key]; del EVENT_QUEUE_SYSTEM[slot_key]
+    Message = MESSAGE_BUS[slot_key]; del MESSAGE_BUS[slot_key]; del EVENT_QUEUE_SYSTEM[slot_key]
     result = [data for data in Message if data]
     if result:
         message = {entry.keys()[0]:entry[entry.keys()[0]] for entry in result}
