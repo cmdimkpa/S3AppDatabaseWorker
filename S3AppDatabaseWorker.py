@@ -83,7 +83,7 @@ def RunParallelS3Events(Events,slot_key):
     MESSAGE_BUS[slot_key] = []; workers = []
     for event in Events:
         worker = Thread(target=network_event_handler, args=(event,slot_key))
-        worker.daemon = true
+        #worker.daemon = true
         worker.start()
         workers.append(worker)
     for worker in workers:
