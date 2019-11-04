@@ -83,7 +83,6 @@ def RunParallelS3Events(Events,slot_key):
     MESSAGE_BUS[slot_key] = []
     for event in Events:
         event_worker = Thread(target=network_event_handler, args=(event,slot_key))
-        event_worker.daemon = true
         event_worker.start()
     while len(MESSAGE_BUS[slot_key]) < len(Events):
         pass
