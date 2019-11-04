@@ -80,9 +80,9 @@ def network_event_handler(event,slot_key):
 
 def RunParallelS3Events(Events,slot_key):
     global MESSAGE_BUS
-    MESSAGE_BUS[slot_key] = []; worker = Thread(); worker.daemon = true; worker.start()
+    MESSAGE_BUS[slot_key] = []; worker = Thread(); worker.daemon = true
     for event in Events:
-        worker.run(target=network_event_handler, args=(event,slot_key))
+        worker.start(target=network_event_handler, args=(event,slot_key))
     worker.join()
 
 def AsyncS3MessagePolling(Events):
