@@ -87,7 +87,6 @@ class SimpleQueue():
         except:
             return null
 
-
 class NetworkEventProcessor(Thread):
     global MESSAGE_BUS, EVENT_QUEUE_SYSTEM
     def __init__(self, slot_key):
@@ -96,7 +95,7 @@ class NetworkEventProcessor(Thread):
         MESSAGE_BUS[self.slot_key] = []
         EVENT_QUEUE_SYSTEM[self.slot_key] = SimpleQueue()
     def run(self):
-        while True:
+        while self.slot_key in EVENT_QUEUE_SYSTEM and self.slot_key in MESSAGE_BUS:
             event = EVENT_QUEUE_SYSTEM[self.slot_key].get()
             if event:
                 MESSAGE_BUS[self.slot_key].append(network_event_handler(event))
@@ -112,7 +111,7 @@ def RunParallelS3Events(Events,slot_key):
 def AsyncS3MessagePolling(Events):
     global MESSAGE_BUS, EVENT_QUEUE_SYSTEM
     slot_key = new_id(); RunParallelS3Events(Events,slot_key)
-    Message = MESSAGE_BUS[slot_key]; del MESSAGE_BUS[slot_key]
+    Message = MESSAGE_BUS[slot_key]; del MESSAGE_BUS[slot_key]; del EVENT_QUEUE_SYSTEM[slot_key]
     result = [data for data in Message if data]
     if result:
         message = {entry.keys()[0]:entry[entry.keys()[0]] for entry in result}
