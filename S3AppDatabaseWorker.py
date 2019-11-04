@@ -96,9 +96,12 @@ class NetworkEventProcessor(Thread):
         EVENT_QUEUE_SYSTEM[self.slot_key] = SimpleQueue()
     def run(self):
         while self.slot_key in EVENT_QUEUE_SYSTEM and self.slot_key in MESSAGE_BUS:
-            event = EVENT_QUEUE_SYSTEM[self.slot_key].get()
-            if event:
-                MESSAGE_BUS[self.slot_key].append(network_event_handler(event))
+            try:
+                event = EVENT_QUEUE_SYSTEM[self.slot_key].get()
+                if event:
+                    MESSAGE_BUS[self.slot_key].append(network_event_handler(event))
+            except:
+                pass
 
 def RunParallelS3Events(Events,slot_key):
     global MESSAGE_BUS, EVENT_QUEUE_SYSTEM
