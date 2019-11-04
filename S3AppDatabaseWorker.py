@@ -78,12 +78,15 @@ def network_event_handler(event,slot_key):
     MESSAGE_BUS[slot_key].append(eval(event["event"])(params))
     return null
 
+def RunEvents(Events,slot_key):
+    return [network_event_handler(event,slot_key) for event in Events]
+
 def RunParallelS3Events(Events,slot_key):
     global MESSAGE_BUS
     MESSAGE_BUS[slot_key] = []
-    for event in Events:
-        event_worker = Thread(target=network_event_handler, args=(event,slot_key))
-        event_worker.start()
+    event_worker = Thread(target=RunEvents, args=(Events,slot_key))
+    event_worker.daemon = true
+    event_worker.start()
     while len(MESSAGE_BUS[slot_key]) < len(Events):
         pass
     return null
