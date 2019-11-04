@@ -99,6 +99,7 @@ def RunParallelS3Events(Events,slot_key):
         NetworkAgent.daemon = True; NetworkAgent.start()
     for event in Events:
         EVENT_QUEUE_SYSTEM[slot_key].put(event)
+    for event in Events:
         EVENT_QUEUE_SYSTEM[slot_key].join()
 
 def AsyncS3MessagePolling(Events):
