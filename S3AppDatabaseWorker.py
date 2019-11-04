@@ -12,7 +12,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = "S3AppDatabaseWorker"
 CORS(app)
 
-global server_host, server_port, true, false, null, conn, bucket, MESSAGE_BUS
+global server_host, server_port, true, false, null, conn, bucket
 
 s3bucket_name,s3conn_user,s3conn_pass,s3region,server_host,server_port = sys.argv[1:]
 conn = S3Connection(s3conn_user, s3conn_pass, host="s3.%s.amazonaws.com" % s3region)
@@ -20,7 +20,7 @@ try:
     bucket = conn.create_bucket(s3bucket_name)
 except:
     bucket = conn.get_bucket(s3bucket_name)
-true = True; false = False; null = None; MESSAGE_BUS = {}
+true = True; false = False; null = None
 
 def now():
     return str(datetime.datetime.today())
@@ -51,47 +51,46 @@ def new_id():
     hasher.update(now())
     return hasher.hexdigest()
 
-def network_event_handler(event,slot_key):
-    global MESSAGE_BUS
-    try:
-        def delete_data(params):
-            keyname = params[0]
-            key = Key(bucket); key.key = keyname; key.delete()
+def RunParallelS3Events(Events):
+    global Messages
+    Messages = []
+    def network_event_handler(event):
+        global Messages
+        try:
+            def delete_data(params):
+                keyname = params[0]
+                key = Key(bucket); key.key = keyname; key.delete()
+                return null
+            def write_data(params):
+                keyname,stringdata = params
+                key = Key(bucket); key.key = keyname; key.set_contents_from_string(stringdata)
+                return null
+            def read_data(params):
+                keyname = params[0]
+                key = Key(bucket); key.key = keyname
+                try:
+                    content = eval(key.get_contents_as_string())
+                except:
+                    content = {}
+                return {keyname:content}
+        except:
             return null
-        def write_data(params):
-            keyname,stringdata = params
-            key = Key(bucket); key.key = keyname; key.set_contents_from_string(stringdata)
-            return null
-        def read_data(params):
-            keyname = params[0]
-            key = Key(bucket); key.key = keyname
-            try:
-                content = eval(key.get_contents_as_string())
-            except:
-                content = {}
-            return {keyname:content}
-    except:
+        params = [event["keyname"]]
+        if "write_data" in event["event"]:
+            params.append(event["datastring"])
+        Messages.append(eval(event["event"])(params))
         return null
-    params = [event["keyname"]]
-    if "write_data" in event["event"]:
-        params.append(event["datastring"])
-    MESSAGE_BUS[slot_key].append(eval(event["event"])(params))
-    return null
-
-def RunEvents(Events,slot_key):
-    return [network_event_handler(event,slot_key) for event in Events]
-
-def RunParallelS3Events(Events,slot_key):
-    global MESSAGE_BUS
-    MESSAGE_BUS[slot_key] = []
-    RunEvents(Events,slot_key)
-    return null
+    for event in Events:
+        event_worker = Thread(target=network_event_handler,args=(event,))
+        event_worker.daemon = true
+        event_worker.start()
+    while len(Messages) < len(Events):
+        pass
+    return Messages
 
 def AsyncS3MessagePolling(Events):
-    global MESSAGE_BUS
-    slot_key = new_id(); RunParallelS3Events(Events,slot_key)
-    Message = MESSAGE_BUS[slot_key]; del MESSAGE_BUS[slot_key]
-    result = [data for data in Message if data]
+    Messages = RunParallelS3Events(Events)
+    result = [data for data in Messages if data]
     if result:
         message = {entry.keys()[0]:entry[entry.keys()[0]] for entry in result}
     else:
