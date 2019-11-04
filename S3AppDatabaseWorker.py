@@ -6,7 +6,6 @@ from boto.s3.connection import S3Connection
 from boto.s3.key import Key
 import requests as http
 from hashlib import md5
-from threading import Thread
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = "S3AppDatabaseWorker"
@@ -51,11 +50,9 @@ def new_id():
     hasher.update(now())
     return hasher.hexdigest()
 
-def RunParallelS3Events(Events):
-    global Messages
+def NetworkEventProcessor(Events):
     Messages = []
-    def network_event_handler(event):
-        global Messages
+    def network_event_handler(event,Messages):
         try:
             def delete_data(params):
                 keyname = params[0]
@@ -79,15 +76,13 @@ def RunParallelS3Events(Events):
         if "write_data" in event["event"]:
             params.append(event["datastring"])
         Messages.append(eval(event["event"])(params))
-        return null
+        return Messages
     for event in Events:
-        event_worker = Thread(target=network_event_handler,args=(event,)); event_worker.daemon = true; event_worker.start()
-    while len(Messages) < len(Events):
-        pass
+        Messages = network_event_handler(event,Messages)
     return Messages
 
-def AsyncS3MessagePolling(Events):
-    Messages = RunParallelS3Events(Events)
+def NetworkPolling(Events):
+    Messages = NetworkEventProcessor(Events)
     result = [data for data in Messages if data]
     if result:
         message = {entry.keys()[0]:entry[entry.keys()[0]] for entry in result}
@@ -129,33 +124,33 @@ def gzipped(f):
     return view_func
 
 def get_register():
-    Message = AsyncS3MessagePolling([
+    Message = NetworkPolling([
         {"event":"read_data","keyname":"S3AppDatabase.register"},
     ])
     REGISTER = Message["S3AppDatabase.register"]
     if not REGISTER:
-        AsyncS3MessagePolling([
+        NetworkPolling([
             {"event":"write_data","keyname":"S3AppDatabase.register","datastring":repr({})},
         ])
         REGISTER = {}
     return REGISTER
 
 def set_register(REGISTER):
-    AsyncS3MessagePolling([
+    NetworkPolling([
         {"event":"write_data","keyname":"S3AppDatabase.register","datastring":repr(REGISTER)},
     ])
     return null
 
 def get_table(prototype):
     tablename = str("S3AppDatabase.%s.table" % prototype)
-    Message = AsyncS3MessagePolling([
+    Message = NetworkPolling([
         {"event":"read_data","keyname":"S3AppDatabase.register"},
         {"event":"read_data","keyname":tablename},
     ])
     REGISTER = Message["S3AppDatabase.register"]
     TABLE = Message[tablename]
     if not REGISTER:
-        AsyncS3MessagePolling([
+        NetworkPolling([
             {"event":"write_data","keyname":"S3AppDatabase.register", "datastring":repr({})},
         ])
     return TABLE,REGISTER
@@ -163,7 +158,7 @@ def get_table(prototype):
 def get_table_and_index(prototype):
     tablename = str("S3AppDatabase.%s.table" % prototype)
     indexname = str("S3AppDatabase.%s.index" % prototype)
-    Message = AsyncS3MessagePolling([
+    Message = NetworkPolling([
         {"event":"read_data","keyname":"S3AppDatabase.register"},
         {"event":"read_data","keyname":tablename},
         {"event":"read_data","keyname":indexname},
@@ -172,7 +167,7 @@ def get_table_and_index(prototype):
     TABLE = Message[tablename]
     INDEX = Message[indexname]
     if not REGISTER:
-        AsyncS3MessagePolling([
+        NetworkPolling([
             {"event":"write_data","keyname":"S3AppDatabase.register","datastring":repr({})}
         ])
     return TABLE,INDEX,REGISTER
@@ -181,7 +176,7 @@ def set_table_and_index(prototype,TABLE,INDEX,REGISTER):
     if prototype in REGISTER:
         tablename = str("S3AppDatabase.%s.table" % prototype)
         indexname = str("S3AppDatabase.%s.index" % prototype)
-        AsyncS3MessagePolling([
+        NetworkPolling([
             {"event":"write_data","keyname":tablename,"datastring":repr(TABLE)},
             {"event":"write_data","keyname":indexname,"datastring":repr(INDEX)},
             {"event":"write_data","keyname":"S3AppDatabase.register","datastring":repr(REGISTER)},
@@ -464,7 +459,7 @@ def rrc(prototype):
         register = get_register()
         if prototype in register:
             register[prototype]["row_count"] = 0
-            AsyncS3MessagePolling([
+            NetworkPolling([
                 {"event":"write_data","keyname":"S3AppDatabase.register","datastring":repr(register)},
                 {"event":"delete_data","keyname":str("S3AppDatabase.%s.index" % prototype)},
                 {"event":"delete_data","keyname":str("S3AppDatabase.%s.table" % prototype)},
