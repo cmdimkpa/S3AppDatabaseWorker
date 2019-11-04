@@ -52,10 +52,8 @@ def new_id():
     return hasher.hexdigest()
 
 def RunParallelS3Events(Events):
-    global Messages
     Messages = []
-    def network_event_handler(event):
-        global Messages
+    def network_event_handler(event,Messages):
         try:
             def delete_data(params):
                 keyname = params[0]
@@ -79,13 +77,9 @@ def RunParallelS3Events(Events):
         if "write_data" in event["event"]:
             params.append(event["datastring"])
         Messages.append(eval(event["event"])(params))
-        return null
+        return Messages
     for event in Events:
-        event_worker = Thread(target=network_event_handler,args=(event,))
-        event_worker.daemon = true
-        event_worker.start()
-    while len(Messages) < len(Events):
-        pass
+        Messages = network_event_handler(event,Messages)
     return Messages
 
 def AsyncS3MessagePolling(Events):
