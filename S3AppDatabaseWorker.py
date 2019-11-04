@@ -82,7 +82,10 @@ class SimpleQueue():
     def put(self,task):
         self.queue.insert(0,task)
     def get(self):
-        return self.queue.pop()
+        try:
+            return self.queue.pop()
+        except:
+            return null
 
 class NetworkEventProcessor(Thread):
     global MESSAGE_BUS, EVENT_QUEUE_SYSTEM
@@ -94,10 +97,8 @@ class NetworkEventProcessor(Thread):
     def run(self):
         while True:
             event = EVENT_QUEUE_SYSTEM[self.slot_key].get()
-            try:
+            if event:
                 MESSAGE_BUS[self.slot_key].append(network_event_handler(event))
-            finally:
-                pass
 
 def RunParallelS3Events(Events,slot_key):
     global MESSAGE_BUS, EVENT_QUEUE_SYSTEM
