@@ -4,7 +4,6 @@ from flask_cors import CORS
 import json,base64,cStringIO,gzip,functools,boto,datetime,sys,time
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
-import requests as http
 from hashlib import md5
 
 app = Flask(__name__)
