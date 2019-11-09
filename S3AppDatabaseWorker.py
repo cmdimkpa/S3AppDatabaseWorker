@@ -229,6 +229,12 @@ def is_partial_match(string,options):
 def is_range_match(number,vector):
     return number>=vector[0] and number<=vector[1]
 
+def safely_extract(res,key):
+    try:
+        return res[key]
+    except:
+        return null
+
 def search_index(prototype,constraints,mode="rows",value_dict={},page_size=None,this_page=None):
     global inner_matches
     def process(array):
@@ -250,7 +256,7 @@ def search_index(prototype,constraints,mode="rows",value_dict={},page_size=None,
             intersect = intersect.intersection(set(match))
         matches = paginate(list(intersect),page_size,this_page)
         if mode == "records":
-            return [TABLE[row_id] for row_id in matches]
+            return [safely_extract(TABLE,row_id) for row_id in matches]
         elif mode == "update":
             return update_rows(INDEX,TABLE,REGISTER,matches,prototype,value_dict)
         else:
