@@ -71,7 +71,6 @@ app.get('*',(req,res)=>{
         );
     });
 
-
 https.createServer({
   key: fs.readFileSync('__SERVER_KEYFILE__'),
   cert: fs.readFileSync('__SERVER_CERTFILE__')
