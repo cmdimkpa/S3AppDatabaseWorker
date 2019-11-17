@@ -1,4 +1,6 @@
 var express = require('express');
+var fs = require('fs')
+var https = require('https')
 var bodyParser = require('body-parser');
 var path = require('path');
 var cors = require('cors')
@@ -44,7 +46,7 @@ var port = __DB_GATEWAY_PORT__;
 
 // Mask configuration
 function maskURL(){
-  return "http://__DB_SERVER_HOST__:__DB_SERVER_PORT__"   // replace with actual mask URL
+  return "https://__DB_SERVER_HOST__:__DB_SERVER_PORT__"   // replace with actual mask URL
 }
 
 //routes
@@ -69,6 +71,11 @@ app.get('*',(req,res)=>{
         );
     });
 
-app.listen(port,()=>{
-	console.log('server running on port '+port);
+
+https.createServer({
+  key: fs.readFileSync('__SERVER_KEYFILE__'),
+  cert: fs.readFileSync('__SERVER_CERTFILE__')
+}, app)
+.listen(port,()=>{
+  console.log('server running on port '+port);
 });
