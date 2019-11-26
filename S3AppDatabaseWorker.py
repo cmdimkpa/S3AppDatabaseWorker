@@ -425,10 +425,10 @@ def handle_fetch_records():
         constraints = formdata["constraints"]
         prototype = formdata["tablename"]
         if constraints in ["*",{}]:
-            constraints = {"__private__":0}
+            result = fetch_rows(prototype,constraints)
         else:
-            constraints = {key:format_param(constraints[key]) for key in constraints}; constraints["__private__"] = 0
-        return responsify(200,"logical table selection: %s" % prototype,search_index(prototype,constraints,"records",{},page_size,this_page))
+            constraints["__private__"] = 0; constraints = {key:format_param(constraints[key]) for key in constraints}; result = search_index(prototype,constraints,"records",{},page_size,this_page)
+        return responsify(200,"logical table selection: %s" % prototype,result)
     except Exception as e:
         return responsify(400,"error clue: %s" % str(e))
 
