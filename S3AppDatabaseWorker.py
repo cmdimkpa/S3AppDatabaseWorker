@@ -427,8 +427,7 @@ def handle_fetch_records():
         if constraints in ["*",{}]:
             constraints = {"__private__":0}
         else:
-            constraints["__private__"] = 0
-        constraints = {key:format_param(constraints[key]) for key in constraints}
+            constraints = {key:format_param(constraints[key]) for key in constraints}; constraints["__private__"] = 0
         return responsify(200,"logical table selection: %s" % prototype,search_index(prototype,constraints,"records",{},page_size,this_page))
     except Exception as e:
         return responsify(400,"error clue: %s" % str(e))
