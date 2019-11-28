@@ -425,7 +425,7 @@ def handle_fetch_records():
         constraints = formdata["constraints"]
         prototype = formdata["tablename"]
         if constraints in ["*",{}]:
-            result = fetch_rows(prototype,constraints)
+            result = [x for x in fetch_rows(prototype,constraints) if x["__private__"] == 0]
         else:
             constraints["__private__"] = 0; constraints = {key:format_param(constraints[key]) for key in constraints}; result = search_index(prototype,constraints,"records",{},page_size,this_page)
         return responsify(200,"logical table selection: %s" % prototype,result)
